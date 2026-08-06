@@ -13,28 +13,12 @@ from routers import auth, agents, applications, clients, purchases, commissions,
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print(f"🚀 Запуск {settings.APP_NAME} v{settings.APP_VERSION}")
-    
-    # Ждём готовности БД
-    import time
-    print("⏳ Ожидание готовности PostgreSQL...")
-    for i in range(30):
-        try:
-            from database import sync_engine
-            with sync_engine.connect() as conn:
-                conn.execute("SELECT 1")
-                print("✅ PostgreSQL готов")
-                break
-        except Exception:
-            if i == 29:
-                print("❌ PostgreSQL не готов после 30 попыток")
-                raise
-            time.sleep(1)
-    
     create_db_if_not_exists()
     create_tables()
-    print("✅ Backend готов к работе")
+    print("✅ Backend готов")
     yield
     print("👋 Backend остановлен")
+
 
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION, lifespan=lifespan, docs_url="/docs", redoc_url="/redoc")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
