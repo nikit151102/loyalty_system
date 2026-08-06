@@ -3,16 +3,29 @@ from enum import Enum
 
 class UserState(Enum):
     IDLE = "idle"
+    
+    # Регистрация агента
     REG_WAITING_PHONE = "reg_waiting_phone"
     REG_WAITING_EMAIL = "reg_waiting_email"
     REG_WAITING_TYPE = "reg_waiting_type"
     REG_CONFIRMATION = "reg_confirmation"
+    
+    # Регистрация клиента по рефералке
+    CLIENT_REG_WAITING_NAME = "client_reg_waiting_name"
+    CLIENT_REG_WAITING_PHONE = "client_reg_waiting_phone"
+    CLIENT_REG_WAITING_EMAIL = "client_reg_waiting_email"
+    CLIENT_REG_WAITING_INN = "client_reg_waiting_inn"
+    CLIENT_REG_CONFIRM = "client_reg_confirm"
+    
+    # Добавление клиента (агентом)
     ADD_CLIENT_NAME = "add_client_name"
     ADD_CLIENT_PHONE = "add_client_phone"
     ADD_CLIENT_EMAIL = "add_client_email"
     ADD_CLIENT_INN = "add_client_inn"
     ADD_CLIENT_TYPE = "add_client_type"
     ADD_CLIENT_CONFIRM = "add_client_confirm"
+    
+    # Покупки
     ADD_PURCHASE_AMOUNT = "add_purchase_amount"
     ADD_PURCHASE_ORDER = "add_purchase_order"
     ADD_PURCHASE_COMMENT = "add_purchase_comment"

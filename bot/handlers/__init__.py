@@ -8,3 +8,4 @@ from handlers.statistics import register_statistics_handlers
 from handlers.referrals import register_referrals_handlers
 from handlers.admin import register_admin_handlers
 from handlers.help import register_help_handlers
+from handlers.client_referral import register_client_referral_handlers 

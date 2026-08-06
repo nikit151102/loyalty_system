@@ -96,4 +96,13 @@ class APIClient:
     async def get_my_statistics(self, token): return await self._auth_request("GET", "/statistics/me", token)
     async def get_my_referral_info(self, token): return await self._auth_request("GET", "/referrals/me", token)
 
+    async def get_agent_by_referral(self, code: str) -> Optional[Dict]:
+        """Получить агента по реферальному коду"""
+        return await self._request("GET", f"/agents/by-referral/{code}")
+
+    async def add_client_external(self, client_data: Dict) -> Optional[Dict]:
+        """Создать клиента без JWT (для регистрации по рефералке)"""
+        return await self._request("POST", "/clients/external", json=client_data)
+
+
 api_client = APIClient()

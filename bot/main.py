@@ -12,7 +12,7 @@ from api_client import api_client
 from handlers import (
     register_start_handlers, register_registration_handlers, register_status_handlers,
     register_agent_menu_handlers, register_clients_handlers, register_statistics_handlers,
-    register_referrals_handlers, register_admin_handlers, register_help_handlers,
+    register_referrals_handlers, register_admin_handlers, register_help_handlers, register_client_referral_handlers
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -26,6 +26,7 @@ class LoyaltyBot:
         self.user_data = {}
         self._register_all_handlers()
     
+
     def _register_all_handlers(self):
         register_start_handlers(self.dp, self.bot, self.user_states, self.user_data, api_client)
         register_registration_handlers(self.dp, self.bot, self.user_states, self.user_data)
@@ -36,7 +37,8 @@ class LoyaltyBot:
         register_referrals_handlers(self.dp, self.bot, self.user_states, self.user_data)
         register_admin_handlers(self.dp, self.bot, self.user_states, self.user_data)
         register_help_handlers(self.dp, self.bot, self.user_states, self.user_data)
-    
+        register_client_referral_handlers(self.dp, self.bot, self.user_states, self.user_data)  
+
     async def run(self):
         logger.info("🤖 MAX-бот запускается...")
         try:

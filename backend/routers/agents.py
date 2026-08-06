@@ -38,3 +38,23 @@ async def get_agent(agent_id: int, payload: dict = Depends(get_current_user), se
 async def list_agents(skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=1000), session: AsyncSession = Depends(get_session)):
     agents = await AgentService.get_all_agents(session, skip, limit)
     return [AgentResponse.model_validate(a) for a in agents]
+
+@router.get("/by-referral/{referral_code}", dependencies=[Depends(verify_api_key)])
+async def get_agent_by_referral_code(
+    referral_code: str,
+    session: AsyncSession = Depends(get_session)
+):
+    """Получить агента по реферальному коду (для бота)"""
+    from services.agent_service import AgentService
+    
+    agent = await AgentService.get_agent_by_referral_code(session, referral_code)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Агент с таким кодом не найден")
+    
+    return {
+        "id": agent.id,
+        "max_user_id": agent.max_user_id,
+        "referral_code": agent.referral_code,
+        "status": agent.status.value if hasattr(agent.status, "value") else agent.status,
+        "total_clients": agent.total_clients,
+    }
