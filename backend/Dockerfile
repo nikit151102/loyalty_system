@@ -13,9 +13,9 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --tru
 COPY . .
 
 # Открываем порт
-EXPOSE 6810
+EXPOSE 6910
 
 # Запускаем приложение
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "6810", "--reload"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "6910", "--reload"]
 
 

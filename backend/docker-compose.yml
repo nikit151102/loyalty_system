@@ -6,15 +6,15 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "6810:6810"
-      - "6811:6811"
+      - "6910:6910"
+      - "6911:6911"
     networks:
       - loyalty_network       
     env_file:
       - .env
     volumes:
       - .:/app
-    command: uvicorn main:app --host 0.0.0.0 --port 6810 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 6910 --reload
 
   loyalty_postgres_db:
     container_name: loyalty_postgres_db
@@ -22,7 +22,7 @@ services:
     restart: always
     shm_size: 128mb
     ports:
-      - "6855:5432"
+      - "6955:5432"
     volumes:
       - loyalty_postgres_data:/var/lib/postgresql/data
     environment:
