@@ -10,8 +10,9 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     
     # ДОБАВЛЕНО: Переменные для бота, чтобы Pydantic их видел
-    MAX_BOT_TOKEN: str = ""
+    MAX_BOT_TOKEN: str = "f9LHodD0cOLusVKv8RL6mJjbRnRDq60APk29-XTE3uSoTCUDuaqKWfnEB7bujVjv5sdZMtSc7S_icts-ijNF"
     MAX_BOT_NAME: str = ""
+    MAX_API_URL: str = "https://platform-api2.max.ru"
     
     # Поправлен дефолтный порт на 6810 для соответствия docker-compose
     API_BASE_URL: str = os.getenv("API_BASE_URL", "http://localhost:6810")
@@ -29,6 +30,8 @@ class Settings(BaseSettings):
     ADMIN_USER_IDS: str = os.getenv("ADMIN_USER_IDS", "")
     BASE_REFERRAL_URL: str = os.getenv("BASE_REFERRAL_URL", "https://max.ru/your_bot")
     
+
+
     COMMISSION_RATE_LOW: float = 0.03
     COMMISSION_RATE_HIGH: float = 0.05
     COMMISSION_THRESHOLD: float = 100000.0

@@ -13,7 +13,7 @@ class AgentService:
     async def create_agent(session: AsyncSession, max_user_id: int, phone: str, email: str,
                           registration_type: RegistrationType, invited_by_agent_id: Optional[int] = None) -> Agent:
         existing = await get_agent_by_user_id(max_user_id, session)
-        if existing: raise ValueError("Агент уже существует")
+        if existing: return existing
         referral_code = shortuuid.uuid()[:10].upper()
         agent = Agent(
             max_user_id=max_user_id, phone=phone, email=email,
