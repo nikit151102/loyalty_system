@@ -9,7 +9,12 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
     
-    API_BASE_URL: str = os.getenv("API_BASE_URL", "http://localhost:6410")
+    # ДОБАВЛЕНО: Переменные для бота, чтобы Pydantic их видел
+    MAX_BOT_TOKEN: str = ""
+    MAX_BOT_NAME: str = ""
+    
+    # Поправлен дефолтный порт на 6810 для соответствия docker-compose
+    API_BASE_URL: str = os.getenv("API_BASE_URL", "http://localhost:6810")
     API_SECRET_KEY: str = os.getenv("API_SECRET_KEY", "change_me")
     API_KEY: str = os.getenv("API_KEY", "bot_api_key")
     JWT_ALGORITHM: str = "HS256"
@@ -44,6 +49,7 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 
 settings = Settings()
