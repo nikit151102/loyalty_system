@@ -1,0 +1,10 @@
+"""Хендлеры бота"""
+from handlers.start import register_start_handlers
+from handlers.registration import register_registration_handlers
+from handlers.status import register_status_handlers
+from handlers.agent_menu import register_agent_menu_handlers
+from handlers.clients import register_clients_handlers
+from handlers.statistics import register_statistics_handlers
+from handlers.referrals import register_referrals_handlers
+from handlers.admin import register_admin_handlers
+from handlers.help import register_help_handlers

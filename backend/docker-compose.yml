@@ -1,0 +1,43 @@
+services:
+  loyalty_api:
+    container_name: loyalty_api_service
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "6810:6810"
+      - "6811:6811"
+    networks:
+      - loyalty_network       
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 6810 --reload
+
+  loyalty_postgres_db:
+    container_name: loyalty_postgres_db
+    image: postgres:15
+    restart: always
+    shm_size: 128mb
+    ports:
+      - "6855:5432"
+    volumes:
+      - loyalty_postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: loyalty_db
+    networks:
+      - loyalty_network
+
+
+volumes:
+  loyalty_postgres_data:
+
+networks:
+  loyalty_network:
+    driver: bridge
+
+
