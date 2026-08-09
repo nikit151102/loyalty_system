@@ -79,7 +79,7 @@ async def delete_client(client_id: int, payload: dict = Depends(get_current_user
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/by-phone/{phone}", dependencies=[Depends(verify_api_key)])
+@router.get("/by-phone/{phone}")
 async def by_phone(phone: str, session: AsyncSession = Depends(get_session)):
     client = (await session.execute(select(Client).where(Client.phone == phone))).scalar_one_or_none()
     return ClientResponse.model_validate(client) if client else None

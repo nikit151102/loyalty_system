@@ -5,15 +5,16 @@ import { Chat } from '../../services/chat';
 import { PhoneInput } from '../phone-input/phone-input';
 import { TypingIndicator } from '../typing-indicator/typing-indicator';
 import { MessageBubble } from '../message-bubble/message-bubble';
+import { EmailInput } from '../email-input';
 
 @Component({
   selector: 'app-chat-container',
-  imports: [CommonModule, MessageBubble, TypingIndicator, PhoneInput],
+  imports: [CommonModule, MessageBubble, TypingIndicator, PhoneInput, EmailInput],
   animations: [chatAnimations.messageEnter],
   templateUrl: './chat-container.html',
   styleUrl: './chat-container.scss',
 })
-export class ChatContainer  implements AfterViewChecked {
+export class ChatContainer implements AfterViewChecked {
   chat = inject(Chat);
   config = { BOT_NAME: 'Макс-Бот', BOT_AVATAR: '🤖' };
 
@@ -31,6 +32,16 @@ export class ChatContainer  implements AfterViewChecked {
 
   onPhoneSubmit(phone: string): void {
     this.chat.submitPhone(phone);
+  }
+
+  // Метод для отправки шага регистрации
+  onRegStepSubmit(step: number, value: string): void {
+    this.chat.submitRegStep(step, value);
+  }
+
+  // Метод для клиентской регистрации
+  onClientStepSubmit(step: number, value: string): void {
+    this.chat.submitClientStep(step, value);
   }
 
   onButtonClick(action: string, data: any): void {

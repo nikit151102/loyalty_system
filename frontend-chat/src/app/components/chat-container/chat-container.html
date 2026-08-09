@@ -24,5 +24,18 @@
         @if (chat.state() === 'asking_phone') {
         <app-phone-input (phoneSubmit)="onPhoneSubmit($event)" [@messageEnter] />
         }
+
+        <!-- Добавляем поля ввода для регистрации -->
+        @if (chat.state() === 'agent_registration' && chat.registrationStep() === 1) {
+        <app-phone-input (phoneSubmit)="onRegStepSubmit(1, $event)" [@messageEnter] placeholder="Введите номер телефона" />
+        }
+
+        @if (chat.state() === 'agent_registration' && chat.registrationStep() === 2) {
+        <app-email-input (emailSubmit)="onRegStepSubmit(2, $event)" [@messageEnter] />
+        }
+
+        @if (chat.state() === 'client_registration') {
+        <app-phone-input (phoneSubmit)="onClientStepSubmit(1, $event)" [@messageEnter] placeholder="Введите ИНН" />
+        }
     </div>
 </div>
