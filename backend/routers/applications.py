@@ -76,4 +76,4 @@ async def get_by_user(max_user_id: int, session: AsyncSession = Depends(get_sess
 @router.get("/by-phone/{phone}")
 async def by_phone(phone: str, session: AsyncSession = Depends(get_session)):
     application = (await session.execute(select(Application).where(Application.phone == phone))).scalar_one_or_none()
-    return ClientResponse.model_validate(application) if application else None
+    return ApplicationResponse.model_validate(application) if application else None
