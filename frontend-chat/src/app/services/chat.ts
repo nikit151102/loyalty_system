@@ -77,92 +77,115 @@ export class Chat {
 
   // ==================== PUBLIC ACTIONS ====================
 
+
   async submitPhone(phone: string): Promise<void> {
     this.addUserMessage(phone);
     this.state.set('checking_phone');
 
     await this.addBotMessage('🔍 Проверяю данные в базе...');
 
-    // 1. Check if client exists
-    const client = await firstValueFrom(this.api.getClientByPhone(phone));
-    if (client) {
-      this.currentUser = client;
-      await this.delay(500);
-      await this.addBotMessage(`Добро пожаловать! Вы уже являетесь клиентом программы. 🎉`);
-      this.showClientMenu(client);
-      return;
-    }
-
-    // 2. Try to find agent by phone - use login attempt with phone as max_user_id or by phone
-    // For this demo we'll use a simple hash of phone as max_user_id
-    const maxUserId = this.phoneToId(phone);
-
     try {
-      const loginRes = await firstValueFrom(this.api.login(maxUserId));
-      if (loginRes?.access_token) {
-        const agent = await firstValueFrom(this.api.getMyProfile());
-        this.auth.setAuth(loginRes.access_token, agent, phone);
-        this.currentUser = agent;
-
-        if (agent.status === 'active') {
-          await this.delay(400);
-          await this.addBotMessage(`Рады видеть вас снова, ${agent.email?.split('@')[0] || 'Агент'}! 👋`);
-          this.showAgentMenu();
-        } else if (agent.status === 'blocked') {
-          await this.addBotMessage(`⚠️ Ваш аккаунт заблокирован. Обратитесь в поддержку.`);
-          this.state.set('agent_rejected');
+        // 1. Сначала проверяем, существует ли клиент
+        const client = await firstValueFrom(this.api.getClientByPhone(phone));
+        
+        if (client) {
+            // Клиент найден
+            this.currentUser = client;
+            await this.delay(500);
+            await this.addBotMessage(`Добро пожаловать! Вы уже являетесь клиентом программы. 🎉`);
+            this.showClientMenu(client);
+            return;
         }
-        return;
-      }
-    } catch (e: any) {
-      // Agent not found or login failed - continue to check application
-    }
 
-    // 3. Check application status
-    try {
-      const app = await firstValueFrom(this.api.getApplicationByUser(maxUserId));
-      if (app) {
-        this.currentApplication = app;
-        if (app.status === 'pending') {
-          await this.addBotMessage(`📋 У вас уже есть заявка на рассмотрении. Статус: **⏳ На рассмотрении**`);
-          this.showPendingStatus();
-          return;
-        } else if (app.status === 'rejected') {
-          await this.addBotMessage(`❌ Ваша заявка была отклонена. Причина: ${app.rejection_reason || 'не указана'}`);
-          await this.addBotMessage('Хотите подать новую заявку?');
-          this.state.set('agent_rejected');
-          this.addBotMessage('', {
-            type: 'buttons',
-            buttons: [
-              { id: 'reregister', label: '🔄 Подать заявку снова', action: 'reregister', variant: 'primary' },
-              { id: 'back', label: '← Назад', action: 'back', variant: 'outline' }
-            ]
-          });
-          return;
+        // 2. Если клиент не найден, пробуем найти агента
+        const maxUserId = this.phoneToId(phone);
+        
+        try {
+            const loginRes = await firstValueFrom(this.api.login(maxUserId));
+            
+            if (loginRes?.access_token) {
+                // Агент найден и авторизован
+                const agent = await firstValueFrom(this.api.getMyProfile());
+                this.auth.setAuth(loginRes.access_token, agent, phone);
+                this.currentUser = agent;
+
+                if (agent.status === 'active') {
+                    await this.delay(400);
+                    await this.addBotMessage(`Рады видеть вас снова, ${agent.email?.split('@')[0] || 'Агент'}! 👋`);
+                    this.showAgentMenu();
+                } else if (agent.status === 'blocked') {
+                    await this.addBotMessage(`⚠️ Ваш аккаунт заблокирован. Обратитесь в поддержку.`);
+                    this.state.set('agent_rejected');
+                }
+                return;
+            }
+        } catch (loginError: any) {
+            // Агент не найден или ошибка авторизации - продолжаем
+            console.log('Agent not found, checking application...');
         }
-      }
-    } catch (e) {}
 
-    // 4. Not found - check URL for referral code
-    const urlParams = new URLSearchParams(window.location.search);
-    const referralCode = urlParams.get('ref');
+        // 3. Проверяем статус заявки
+        try {
+            const app = await firstValueFrom(this.api.getApplicationByUser(maxUserId));
+            
+            if (app) {
+                this.currentApplication = app;
+                
+                if (app.status === 'pending') {
+                    await this.addBotMessage(`📋 У вас уже есть заявка на рассмотрении. Статус: **⏳ На рассмотрении**`);
+                    this.showPendingStatus();
+                    return;
+                } else if (app.status === 'rejected') {
+                    await this.addBotMessage(`❌ Ваша заявка была отклонена. Причина: ${app.rejection_reason || 'не указана'}`);
+                    await this.addBotMessage('Хотите подать новую заявку?');
+                    this.state.set('agent_rejected');
+                    this.addBotMessage('', {
+                        type: 'buttons',
+                        buttons: [
+                            { id: 'reregister', label: '🔄 Подать заявку снова', action: 'reregister', variant: 'primary' },
+                            { id: 'back', label: '← Назад', action: 'back', variant: 'outline' }
+                        ]
+                    });
+                    return;
+                } else if (app.status === 'approved') {
+                    // Заявка одобрена, но пользователь еще не агент
+                    await this.addBotMessage(`✅ Ваша заявка одобрена! Вы можете войти в систему.`);
+                    // Можно предложить войти или зарегистрироваться как агент
+                    this.showAgentMenu();
+                    return;
+                }
+            }
+        } catch (appError: any) {
+            // Заявка не найдена - продолжаем
+            console.log('Application not found, starting registration...');
+        }
 
-    if (referralCode) {
-      this.registrationData.referral_code = referralCode;
-      await this.addBotMessage(`🎁 Вы перешли по реферальной ссылке! Давайте оформим вас как клиента программы.`);
-      this.startClientRegistration();
-    } else {
-      await this.addBotMessage(`Вы впервые в нашей программе. Хотите стать агентом?`);
-      this.state.set('agent_registration');
-      this.addBotMessage('', {
-        type: 'buttons',
-        buttons: [
-          { id: 'start_register', label: '🚀 Стать агентом', action: 'start_register', variant: 'primary' },
-          { id: 'learn_more', label: '❓ Узнать больше', action: 'learn_more', variant: 'outline' }
-        ]
-      });
+        // 4. Ничего не найдено - начинаем регистрацию
+        const urlParams = new URLSearchParams(window.location.search);
+        const referralCode = urlParams.get('ref');
+
+        if (referralCode) {
+            this.registrationData.referral_code = referralCode;
+            await this.addBotMessage(`🎁 Вы перешли по реферальной ссылке! Давайте оформим вас как клиента программы.`);
+            this.startClientRegistration();
+        } else {
+            await this.addBotMessage(`Вы впервые в нашей программе. Хотите стать агентом?`);
+            this.state.set('agent_registration');
+            this.addBotMessage('', {
+                type: 'buttons',
+                buttons: [
+                    { id: 'start_register', label: '🚀 Стать агентом', action: 'start_register', variant: 'primary' },
+                    { id: 'learn_more', label: '❓ Узнать больше', action: 'learn_more', variant: 'outline' }
+                ]
+            });
+        }
+        
+    } catch (error: any) {
+        console.error('Error in submitPhone:', error);
+        await this.addBotMessage('⚠️ Произошла ошибка при проверке данных. Попробуйте еще раз.');
+        this.state.set('asking_phone');
     }
-  }
+}
 
   async handleButtonAction(action: string, data?: any): Promise<void> {
     switch (action) {
