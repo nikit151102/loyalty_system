@@ -101,6 +101,66 @@ class NotificationService:
             return False
     
     @staticmethod
+    async def send_photo_message(user_id: int, photo_url: str, text: str = "", buttons: list = None) -> bool:
+        """
+        Отправить сообщение с фото (QR-код) через MAX API.
+        
+        Args:
+            user_id: MAX User ID получателя
+            photo_url: URL изображения
+            text: Текст сообщения
+            buttons: Опциональные inline-кнопки
+        """
+        logger.info(f"📷 Отправка фото пользователю {user_id}: {photo_url[:60]}...")
+        
+        url = f"https://platform-api2.max.ru/messages?user_id={user_id}"
+        
+        headers = {
+            "Authorization": settings.MAX_BOT_TOKEN,
+            "Content-Type": "application/json"
+        }
+        
+        # Формируем вложения: фото + опционально кнопки
+        attachments = [
+            {
+                "type": "photo",
+                "payload": {
+                    "url": photo_url
+                }
+            }
+        ]
+        
+        if buttons:
+            attachments.append({
+                "type": "inline_keyboard",
+                "payload": {
+                    "buttons": buttons
+                }
+            })
+        
+        payload = {
+            "text": text or " ",  # MAX требует текст
+            "attachments": attachments
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+                response = await client.post(url, headers=headers, json=payload)
+                
+                if response.status_code == 200:
+                    logger.info(f"✅ Фото отправлено пользователю {user_id}")
+                    return True
+                else:
+                    logger.error(
+                        f"❌ Ошибка отправки фото: HTTP {response.status_code} - {response.text[:300]}"
+                    )
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"❌ Ошибка отправки фото: {e}")
+            return False
+            
+    @staticmethod
     async def notify_application_approved(user_id: int, agent_id: int) -> bool:
         """Отправить уведомление об одобрении заявки"""
         logger.info(f"🎉 Отправка уведомления об одобрении: user_id={user_id}, agent_id={agent_id}")

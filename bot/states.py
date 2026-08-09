@@ -16,7 +16,7 @@ class UserState(Enum):
     CLIENT_REG_WAITING_EMAIL = "client_reg_waiting_email"
     CLIENT_REG_WAITING_INN = "client_reg_waiting_inn"
     CLIENT_REG_CONFIRM = "client_reg_confirm"
-    
+
     # Добавление клиента (агентом)
     ADD_CLIENT_NAME = "add_client_name"
     ADD_CLIENT_PHONE = "add_client_phone"

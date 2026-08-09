@@ -1,6 +1,6 @@
 """
 Регистрация клиента по реферальной ссылке агента
-Поток: рефералка → форма клиента → QR → кнопка "Стать агентом"
+Поток: рефералка → форма клиента → QR (картинка) → [Стать агентом] → условия → заявка
 """
 from maxapi import Dispatcher, F
 from maxapi.types import MessageCreated, MessageCallback, CallbackButton, ButtonsPayload, Attachment
@@ -8,17 +8,19 @@ from maxapi.enums.intent import Intent
 from states import UserState
 from utils import normalize_phone, validate_email, validate_inn, format_phone
 from api_client import api_client
+from config import config
 import logging
-import base64
 
 logger = logging.getLogger(__name__)
 
 
 def register_client_referral_handlers(dp: Dispatcher, bot, user_states, user_data):
     
+    # ===== НАЧАЛО РЕГИСТРАЦИИ КЛИЕНТА =====
+    
     @dp.message_callback(F.callback.payload == "become_client")
     async def become_client_button(event: MessageCallback):
-        """Начать регистрацию клиента"""
+        """Начать регистрацию клиента по рефералке"""
         await event.answer()
         user_id = event.callback.user.user_id
         chat_id = event.message.recipient.chat_id
@@ -37,7 +39,6 @@ def register_client_referral_handlers(dp: Dispatcher, bot, user_states, user_dat
         user_states[user_id] = UserState.CLIENT_REG_WAITING_NAME
         data["new_client_data"] = {}
         
-        agent_name = agent_info.get("referral_code", "агент")
         await bot.send_message(
             chat_id=chat_id,
             text=f"🎁 **Регистрация клиента по приглашению**\n\n"
@@ -45,6 +46,117 @@ def register_client_referral_handlers(dp: Dispatcher, bot, user_states, user_dat
                  f"**Шаг 1/4 - ФИО**\n\n"
                  f"Введите ваше полное имя:"
         )
+    
+    # ===== ПОКАЗ QR-КОДА =====
+    
+    @dp.message_callback(F.callback.payload == "show_my_qr")
+    async def show_my_qr(event: MessageCallback):
+        """Показать QR-код клиента (картинкой)"""
+        await event.answer()
+        user_id = event.callback.user.user_id
+        chat_id = event.message.recipient.chat_id
+        
+        data = user_data.get(user_id, {})
+        client_data = data.get("my_client_data")
+        
+        if not client_data:
+            await bot.send_message(
+                chat_id=chat_id,
+                text="❌ Вы ещё не зарегистрированы как клиент."
+            )
+            return
+        
+        await send_client_qr_photo(bot, user_id, chat_id, client_data)
+    
+    # ===== СТАТЬ АГЕНТОМ: УСЛОВИЯ =====
+    
+    @dp.message_callback(F.callback.payload == "client_become_agent")
+    async def client_become_agent(event: MessageCallback):
+        """Клиент хочет стать агентом — показываем условия"""
+        await event.answer()
+        user_id = event.callback.user.user_id
+        chat_id = event.message.recipient.chat_id
+        
+        data = user_data.get(user_id, {})
+        
+        # Показываем условия программы
+        conditions_text = (
+            "📋 **Условия агентской программы**\n\n"
+            "💰 **Комиссии:**\n"
+            "• 3% — при обороте до 100 000 ₽\n"
+            "• 5% — при обороте свыше 100 000 ₽\n\n"
+            "🔗 **Реферальная программа:**\n"
+            "• 1 уровень: 50% от комиссии приглашённого агента\n"
+            "• 2 уровень: 25% от комиссии агента 2-го уровня\n\n"
+            "📊 **Что вы получаете:**\n"
+            "• Личный кабинет со статистикой\n"
+            "• Реферальную ссылку для приглашений\n"
+            "• QR-коды для ваших клиентов\n"
+            "• Автоматический расчёт комиссий\n\n"
+            "⚠️ **Требования:**\n"
+            "• Активная деятельность в программе\n"
+            "• Соблюдение правил программы\n"
+            "• Честное привлечение клиентов\n\n"
+            "Готовы подать заявку?"
+        )
+        
+        buttons = [
+            [CallbackButton(text="📝 Подать заявку", payload="submit_agent_application", intent=Intent.POSITIVE)],
+            [CallbackButton(text="⬅️ Назад", payload="back_to_client_menu", intent=Intent.DEFAULT)],
+        ]
+        attachment = Attachment(type="inline_keyboard", payload=ButtonsPayload(buttons=buttons))
+        
+        await bot.send_message(chat_id=chat_id, text=conditions_text, attachments=[attachment])
+    
+    # ===== ПОДАТЬ ЗАЯВКУ АГЕНТА =====
+    
+    @dp.message_callback(F.callback.payload == "submit_agent_application")
+    async def submit_agent_application(event: MessageCallback):
+        """Начать форму регистрации агента"""
+        await event.answer()
+        user_id = event.callback.user.user_id
+        chat_id = event.message.recipient.chat_id
+        
+        data = user_data.get(user_id, {})
+        
+        # Если есть реферальный код — передаём его
+        referral_code = data.get("referral_code")
+        if referral_code:
+            data["registration"] = {"referral_code": referral_code}
+            logger.info(f"📝 Подача заявки агента с рефералкой: {referral_code}")
+        else:
+            data["registration"] = {}
+        
+        # Переключаем на стандартную форму регистрации агента
+        user_states[user_id] = UserState.REG_WAITING_PHONE
+        
+        await bot.send_message(
+            chat_id=chat_id,
+            text="🚀 **Регистрация агента**\n\n"
+                 "**Шаг 1/3 - Номер телефона**\n\n"
+                 "Введите номер телефона:\n"
+                 "Пример: +79991234567"
+        )
+    
+    # ===== ВЕРНУТЬСЯ В МЕНЮ КЛИЕНТА =====
+    
+    @dp.message_callback(F.callback.payload == "back_to_client_menu")
+    async def back_to_client_menu(event: MessageCallback):
+        """Вернуться в меню клиента"""
+        await event.answer()
+        user_id = event.callback.user.user_id
+        chat_id = event.message.recipient.chat_id
+        
+        data = user_data.get(user_id, {})
+        client_data = data.get("my_client_data")
+        
+        if client_data:
+            await show_client_menu_with_qr(bot, user_id, chat_id, client_data)
+        else:
+            from handlers.start import send_start_menu
+            await send_start_menu(bot, chat_id, "друг")
+    
+    # ===== ОТМЕНА РЕГИСТРАЦИИ КЛИЕНТА =====
     
     @dp.message_callback(F.callback.payload == "cancel_client_reg")
     async def cancel_client_reg(event: MessageCallback):
@@ -56,6 +168,8 @@ def register_client_referral_handlers(dp: Dispatcher, bot, user_states, user_dat
         
         from handlers.start import send_start_menu
         await send_start_menu(bot, chat_id, "друг")
+    
+    # ===== ПОДТВЕРЖДЕНИЕ РЕГИСТРАЦИИ КЛИЕНТА =====
     
     @dp.message_callback(F.callback.payload == "confirm_client_reg")
     async def confirm_client_registration(event: MessageCallback):
@@ -72,7 +186,7 @@ def register_client_referral_handlers(dp: Dispatcher, bot, user_states, user_dat
             await bot.send_message(chat_id=chat_id, text="❌ Агент не найден. Попробуйте заново.")
             return
         
-        # Создаём клиента через API
+        # Создаём клиента через API (без модерации!)
         payload = {
             "agent_id": agent_info["id"],  # ← агент из реферального кода
             "full_name": client_data.get("full_name"),
@@ -80,69 +194,28 @@ def register_client_referral_handlers(dp: Dispatcher, bot, user_states, user_dat
             "email": client_data.get("email"),
             "inn": client_data.get("inn"),
             "client_type": "individual",
-            "invited_by_agent_id": agent_info["id"],  # ← кто пригласил
+            "invited_by_agent_id": agent_info["id"],
         }
         
-        result = await api_client.add_client_external(payload)  # без JWT
+        result = await api_client.add_client_external(payload)
         
         if result and not result.get("error"):
             user_states[user_id] = UserState.IDLE
             
-            # Сохраняем данные клиента для дальнейшего использования
+            # Сохраняем данные клиента
             data["my_client_data"] = result
             data["is_client"] = True
             
-            # Показываем QR-код
-            await show_client_qr_and_menu(bot, chat_id, result)
+            # Показываем приветствие с кнопками
+            await show_client_menu_with_qr(bot, user_id, chat_id, result)
+            
+            # Отправляем QR-код как фото
+            await send_client_qr_photo(bot, user_id, chat_id, result)
         else:
             err = result.get("error", "Неизвестная ошибка") if result else "Ошибка соединения"
             await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {err}")
     
-    @dp.message_callback(F.callback.payload == "client_become_agent")
-    async def client_become_agent(event: MessageCallback):
-        """Клиент хочет стать агентом"""
-        await event.answer()
-        user_id = event.callback.user.user_id
-        chat_id = event.message.recipient.chat_id
-        
-        data = user_data.get(user_id, {})
-        
-        # Если есть реферальный код — передаём его
-        referral_code = data.get("referral_code")
-        if referral_code:
-            data["registration"] = {"referral_code": referral_code}
-        else:
-            data["registration"] = {}
-        
-        user_states[user_id] = UserState.REG_WAITING_PHONE
-        
-        await bot.send_message(
-            chat_id=chat_id,
-            text="🚀 **Стать агентом**\n\n"
-                 "Заполните форму для регистрации агента:\n\n"
-                 "**Шаг 1/3 - Номер телефона**\n\n"
-                 "Введите номер телефона:\n"
-                 "Пример: +79991234567"
-        )
-    
-    @dp.message_callback(F.callback.payload == "show_my_qr")
-    async def show_my_qr(event: MessageCallback):
-        """Показать QR-код клиента"""
-        await event.answer()
-        user_id = event.callback.user.user_id
-        chat_id = event.message.recipient.chat_id
-        
-        data = user_data.get(user_id, {})
-        client_data = data.get("my_client_data")
-        
-        if not client_data:
-            await bot.send_message(
-                chat_id=chat_id,
-                text="❌ Вы ещё не зарегистрированы как клиент."
-            )
-            return
-        
-        await show_client_qr_and_menu(bot, chat_id, client_data)
+    # ===== ОБРАБОТКА ТЕКСТА ПРИ РЕГИСТРАЦИИ КЛИЕНТА =====
     
     @dp.message_created(F.message.body.text)
     async def handle_client_reg_text(event: MessageCreated):
@@ -179,12 +252,10 @@ def register_client_referral_handlers(dp: Dispatcher, bot, user_states, user_dat
                 await event.message.answer("❌ Неверный формат телефона")
                 return
             
-            # Проверяем, не существует ли клиент с таким телефоном
+            # Проверяем существование
             existing = await api_client.get_client_by_phone(phone)
             if existing and not existing.get("error"):
-                await event.message.answer(
-                    f"❌ Клиент с телефоном {phone} уже существует"
-                )
+                await event.message.answer(f"❌ Клиент с телефоном {phone} уже существует")
                 return
             
             client_data["phone"] = phone
@@ -240,51 +311,78 @@ def register_client_referral_handlers(dp: Dispatcher, bot, user_states, user_dat
             return
 
 
-async def show_client_qr_and_menu(bot, chat_id: int, client_data: dict):
-    """Показать QR-код клиента и меню действий"""
+# ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
+
+async def show_client_menu_with_qr(bot, user_id: int, chat_id: int, client_data: dict):
+    """Показать меню клиента с кнопками"""
     
-    referral_code = client_data.get("referral_code", "")
     full_name = client_data.get("full_name", "")
+    referral_code = client_data.get("referral_code", "")
     
     text = (
         f"🎉 **Добро пожаловать, {full_name}!**\n\n"
         f"✅ Вы успешно зарегистрированы как клиент\n\n"
         f"🔑 **Ваш код клиента:** `{referral_code}`\n\n"
-        f"📱 **QR-код отправлен ниже** — покажите его при покупке\n\n"
-        f"💰 Вам будет начисляться кэшбэк с покупок!"
+        f"💰 Вам будет начисляться кэшбэк с покупок!\n\n"
+        f"📱 **QR-код отправлен ниже** — покажите его при покупке.\n\n"
+        f"Используйте кнопки ниже:"
     )
     
     buttons = [
-        [CallbackButton(text="🎁 Стать агентом", payload="client_become_agent", intent=Intent.POSITIVE)],
-        [CallbackButton(text="📱 Показать QR ещё раз", payload="show_my_qr", intent=Intent.DEFAULT)],
+        [CallbackButton(text="📱 Показать QR-код", payload="show_my_qr", intent=Intent.DEFAULT)],
+        [CallbackButton(text="🚀 Стать агентом", payload="client_become_agent", intent=Intent.POSITIVE)],
     ]
     attachment = Attachment(type="inline_keyboard", payload=ButtonsPayload(buttons=buttons))
     
     await bot.send_message(chat_id=chat_id, text=text, attachments=[attachment])
+
+
+async def send_client_qr_photo(bot, user_id: int, chat_id: int, client_data: dict):
+    """Отправить QR-код клиента как фото"""
     
-    # Отправляем QR-код как фото (если есть)
-    qr_base64 = client_data.get("qr_code_base64")
-    if qr_base64:
-        try:
-            from maxapi.types import Attachment as PhotoAttachment
-            
-            # Декодируем base64 в файл
-            qr_bytes = base64.b64decode(qr_base64)
-            
-            # Отправляем как фото
-            photo_attachment = PhotoAttachment(
-                type="photo",
-                payload={"base64": qr_base64}  # формат зависит от maxapi
-            )
-            
-            await bot.send_message(
-                chat_id=chat_id,
-                text="📱 Ваш QR-код:",
-                attachments=[photo_attachment]
-            )
-        except Exception as e:
-            logger.error(f"Ошибка отправки QR: {e}")
-            await bot.send_message(
-                chat_id=chat_id,
-                text=f"📱 QR-код (в формате base64): {qr_base64[:100]}..."
-            )
+    client_id = client_data.get("id")
+    referral_code = client_data.get("referral_code", "")
+    
+    if not client_id:
+        logger.error(f"❌ Нет client_id для отправки QR")
+        return
+    
+    # Формируем URL QR-кода
+    qr_url = f"{config.API_BASE_URL}/clients/{client_id}/qr"
+    
+    logger.info(f"📷 Отправка QR-кода: client_id={client_id}, url={qr_url}")
+    
+    # Кнопки под QR-кодом
+    buttons = [
+        [
+            {
+                "type": "callback",
+                "text": "📱 Показать QR ещё раз",
+                "payload": "show_my_qr"
+            }
+        ],
+        [
+            {
+                "type": "callback",
+                "text": "🚀 Стать агентом",
+                "payload": "client_become_agent"
+            }
+        ]
+    ]
+    
+    # Отправляем через NotificationService
+    from services.notification_service import NotificationService
+    
+    success = await NotificationService.send_photo_message(
+        user_id=user_id,
+        photo_url=qr_url,
+        text=f"📱 Ваш QR-код клиента `{referral_code}`:",
+        buttons=buttons
+    )
+    
+    if not success:
+        # Fallback: отправляем текст с URL
+        await bot.send_message(
+            chat_id=chat_id,
+            text=f"📱 Ваш QR-код доступен по ссылке:\n{qr_url}"
+        )

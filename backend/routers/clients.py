@@ -8,6 +8,9 @@ from database import get_session
 from models.schemas import ClientCreateRequest, ClientResponse, ClientUpdateRequest, MessageResponse
 from services.client_service import ClientService
 from models.db_models import ClientType, Client
+from fastapi.responses import Response
+import base64
+
 
 router = APIRouter(prefix="/clients", tags=["clients"])
 
@@ -75,3 +78,26 @@ async def by_phone(phone: str, session: AsyncSession = Depends(get_session)):
 async def by_referral(referral_code: str, session: AsyncSession = Depends(get_session)):
     client = await ClientService.get_client_by_referral_code(session, referral_code)
     return ClientResponse.model_validate(client) if client else None
+
+@router.get("/{client_id}/qr", dependencies=[Depends(verify_api_key)])
+async def get_client_qr_image(
+    client_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    """Вернуть QR-код клиента как PNG-изображение"""
+    client = await ClientService.get_client_by_id(session, client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
+    
+    if not client.qr_code_base64:
+        raise HTTPException(status_code=404, detail="QR-код не найден")
+    
+    qr_bytes = base64.b64decode(client.qr_code_base64)
+    
+    return Response(
+        content=qr_bytes,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f"attachment; filename=qr_{client.referral_code}.png"
+        }
+    )

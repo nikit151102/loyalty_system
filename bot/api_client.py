@@ -103,6 +103,29 @@ class APIClient:
     async def add_client_external(self, client_data: Dict) -> Optional[Dict]:
         """Создать клиента без JWT (для регистрации по рефералке)"""
         return await self._request("POST", "/clients/external", json=client_data)
+    
+    async def get_client_qr_url(self, client_id: int) -> str:
+        """Получить URL QR-кода клиента"""
+        return f"{self.base_url}/clients/{client_id}/qr"
 
+    async def send_photo_message(self, user_id: int, photo_url: str, text: str = "") -> bool:
+        """Отправить фото через MAX API (используя NotificationService)"""
+        from services.notification_service import NotificationService
+        
+        attachments = [
+            {
+                "type": "photo",
+                "payload": {
+                    "url": photo_url
+                }
+            }
+        ]
+        
+        return await NotificationService.send_message(
+            user_id=user_id,
+            text=text,
+            attachments=attachments,
+            notification_type="client_qr_photo"
+        )
 
 api_client = APIClient()
