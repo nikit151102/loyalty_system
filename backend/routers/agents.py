@@ -61,7 +61,7 @@ async def get_agent_by_referral_code(
 
 
 
-@router.get("/by-phone/{phone}", dependencies=[Depends(verify_api_key)])
+@router.get("/by-phone/{phone}")
 async def get_agent_by_phone(phone: str, session: AsyncSession = Depends(get_session)):
     """Поиск агента по номеру телефона"""
     from sqlalchemy import select
