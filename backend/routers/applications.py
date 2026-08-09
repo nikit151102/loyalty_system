@@ -7,6 +7,7 @@ from database import get_session
 from models.schemas import AgentRegisterRequest, ApplicationResponse, MessageResponse
 from services.application_service import ApplicationService
 from models.db_models import RegistrationType
+from sqlalchemy import select
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 

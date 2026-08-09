@@ -45,6 +45,12 @@ export class Api {
         }).pipe(catchError(() => of(null)));
     }
 
+    getApplicationByPhone(phoneNumber: string): Observable<Application | null> {
+        return this.http.get<Application>(`${this.config.API_URL}/applications/by-phone/${phoneNumber}`, {
+            headers: this.headers()
+        }).pipe(catchError(() => of(null)));
+    }
+
     // ==================== AGENTS ====================
     getMyProfile(): Observable<Agent> {
         return this.http.get<Agent>(`${this.config.API_URL}/agents/me`, { headers: this.headers() });

@@ -126,7 +126,7 @@ export class Chat {
 
         // 3. Проверяем статус заявки
         try {
-            const app = await firstValueFrom(this.api.getApplicationByUser(maxUserId));
+            const app = await firstValueFrom(this.api.getApplicationByPhone(phone));
             
             if (app) {
                 this.currentApplication = app;
