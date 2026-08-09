@@ -1,0 +1,37 @@
+<div class="form-container fade-in-up">
+    <h3 class="title">➕ Добавить клиента</h3>
+
+    <form (ngSubmit)="submit()">
+        <div class="field">
+            <label>ФИО клиента</label>
+            <input type="text" [(ngModel)]="form.full_name" name="full_name" required placeholder="Иван Иванов" />
+        </div>
+
+        <div class="field">
+            <label>Телефон</label>
+            <input type="tel" [(ngModel)]="form.phone" name="phone" required placeholder="+7 (999) 123-45-67" />
+        </div>
+
+        <div class="field">
+            <label>Email (необязательно)</label>
+            <input type="email" [(ngModel)]="form.email" name="email" placeholder="example@mail.ru" />
+        </div>
+
+        <div class="field">
+            <label>ИНН (необязательно)</label>
+            <input type="text" [(ngModel)]="form.inn" name="inn" placeholder="1234567890" maxlength="12" />
+        </div>
+
+        <div class="field">
+            <label>Тип клиента</label>
+            <select [(ngModel)]="form.client_type" name="client_type">
+                <option value="individual">Физическое лицо</option>
+                <option value="legal_entity">Юридическое лицо</option>
+            </select>
+        </div>
+
+        <button type="submit" class="submit-btn" [disabled]="!isValid()">
+            ✓ Добавить клиента
+        </button>
+    </form>
+</div>

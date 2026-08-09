@@ -1,0 +1,24 @@
+<div class="qr-container fade-in-up">
+    <h3 class="title">🎫 Ваш персональный QR-код</h3>
+
+    <div class="qr-card">
+        <div class="qr-image">
+            @if (qrDataUrl()) {
+            <img [src]="qrDataUrl()" alt="QR Code" />
+            } @else {
+            <div class="qr-placeholder">QR</div>
+            }
+        </div>
+
+        <div class="qr-info">
+            <div class="qr-name">{{ client?.full_name }}</div>
+            <div class="qr-code">Код: {{ client?.referral_code || 'N/A' }}</div>
+        </div>
+    </div>
+
+    <button class="download-btn" (click)="downloadQR()">
+        ⬇️ Скачать QR-код
+    </button>
+
+    <p class="hint">Покажите QR-код при покупке, чтобы получить бонус</p>
+</div>

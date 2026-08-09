@@ -1,0 +1,57 @@
+  .form-container {
+      padding: 4px 0;
+  }
+
+  .title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+  }
+
+  .field {
+      margin-bottom: 12px;
+  }
+
+  .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--gray-700);
+      margin-bottom: 4px;
+  }
+
+  .field input,
+  .field select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 8px;
+      font-size: 14px;
+      background: white;
+      transition: border-color 0.2s;
+  }
+
+  .field input:focus,
+  .field select:focus {
+      border-color: var(--primary);
+  }
+
+  .submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--primary);
+      color: white;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+  }
+
+  .submit-btn:hover:not(:disabled) {
+      background: var(--primary-dark);
+  }
+
+  .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+  }

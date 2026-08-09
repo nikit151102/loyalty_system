@@ -1,0 +1,9 @@
+<div class="toast-container">
+    @for (toast of toastService.toasts(); track toast.id) {
+    <div class="toast" [@fadeSlide] [class]="toast.type" (click)="toastService.remove(toast.id)">
+        <span class="toast-icon">{{ getIcon(toast.type) }}</span>
+        <span class="toast-msg">{{ toast.message }}</span>
+        <button class="toast-close" (click)="$event.stopPropagation(); toastService.remove(toast.id)">×</button>
+    </div>
+    }
+</div>

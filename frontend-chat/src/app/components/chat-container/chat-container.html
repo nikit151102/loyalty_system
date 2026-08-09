@@ -1,0 +1,28 @@
+<div class="chat-container">
+    <!-- Header -->
+    <div class="chat-header">
+        <div class="bot-avatar">{{ config.BOT_AVATAR }}</div>
+        <div class="bot-info">
+            <div class="bot-name">{{ config.BOT_NAME }}</div>
+            <div class="bot-status">
+                <span class="status-dot"></span>
+                <span>В сети</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Messages area -->
+    <div class="chat-messages" #messagesContainer>
+        @for (msg of chat.messages(); track msg.id) {
+        <app-message-bubble [@messageEnter] [message]="msg" (buttonClick)="onButtonClick($event.action, $event.data)" />
+        }
+
+        @if (chat.isTyping()) {
+        <app-typing-indicator [@messageEnter] />
+        }
+
+        @if (chat.state() === 'asking_phone') {
+        <app-phone-input (phoneSubmit)="onPhoneSubmit($event)" [@messageEnter] />
+        }
+    </div>
+</div>

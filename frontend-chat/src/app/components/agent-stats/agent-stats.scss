@@ -1,0 +1,112 @@
+  .stats-container {
+      padding: 4px 0;
+  }
+
+  .stats-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 12px;
+  }
+
+  .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+  }
+
+  .stat-card {
+      background: #f8fdf6;
+      border: 1px solid #e0eedb;
+      border-radius: 12px;
+      padding: 12px;
+      transition: transform 0.2s;
+  }
+
+  .stat-card:hover {
+      transform: translateY(-2px);
+  }
+
+  .stat-card.highlight {
+      background: linear-gradient(135deg, #327120 0%, #4a8c36 100%);
+      color: white;
+      border: none;
+      grid-column: span 2;
+  }
+
+  .stat-icon {
+      font-size: 20px;
+      margin-bottom: 4px;
+  }
+
+  .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+  }
+
+  .stat-label {
+      font-size: 11px;
+      opacity: 0.8;
+      margin-top: 2px;
+  }
+
+  h4 {
+      font-size: 13px;
+      color: var(--gray-700);
+      margin: 12px 0 8px;
+  }
+
+  .rate-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 12px;
+  }
+
+  .rate-label {
+      width: 40px;
+      font-weight: 600;
+      color: var(--primary);
+  }
+
+  .rate-bar-wrapper {
+      flex: 1;
+      height: 6px;
+      background: var(--gray-100);
+      border-radius: 3px;
+      overflow: hidden;
+  }
+
+  .rate-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #327120, #4a8c36);
+      border-radius: 3px;
+      transition: width 0.6s ease-out;
+  }
+
+  .rate-value {
+      width: 30px;
+      text-align: right;
+      color: var(--gray-500);
+  }
+
+  .top-client {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px;
+      background: var(--gray-50);
+      border-radius: 8px;
+      margin-bottom: 4px;
+      font-size: 12px;
+  }
+
+  .client-name {
+      font-weight: 500;
+  }
+
+  .client-amount {
+      color: var(--primary);
+      font-weight: 600;
+  }

@@ -1,0 +1,74 @@
+.form-container {
+    padding: 4px 0;
+}
+
+.title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    font-size: 13px;
+    color: var(--gray-500);
+    margin-bottom: 12px;
+}
+
+.field {
+    margin-bottom: 12px;
+}
+
+.field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--gray-700);
+    margin-bottom: 4px;
+}
+
+.field input,
+.field textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid var(--gray-200);
+    border-radius: 8px;
+    font-size: 14px;
+    background: white;
+    font-family: inherit;
+}
+
+.field input:focus,
+.field textarea:focus {
+    border-color: var(--primary);
+    outline: none;
+}
+
+.preview {
+    background: var(--primary-bg);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.commission {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.submit-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--primary);
+    color: white;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.submit-btn:disabled {
+    opacity: 0.5;
+}

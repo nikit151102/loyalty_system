@@ -1,0 +1,40 @@
+<div class="clients-container fade-in-up">
+    <h3 class="title">👥 Ваши клиенты ({{ clients.length }})</h3>
+
+    <div class="clients-list">
+        @for (client of paginatedClients(); track client.id) {
+        <div class="client-card">
+            <div class="client-header">
+                <div class="client-avatar">{{ getInitials(client.full_name) }}</div>
+                <div class="client-info">
+                    <div class="client-name">{{ client.full_name }}</div>
+                    <div class="client-phone">{{ client.phone }}</div>
+                </div>
+            </div>
+            <div class="client-stats">
+                <div class="client-stat">
+                    <span class="label">Покупок:</span>
+                    <span class="value">{{ client.purchases_count }}</span>
+                </div>
+                <div class="client-stat">
+                    <span class="label">Сумма:</span>
+                    <span class="value">{{ client.total_purchases_amount | number:'1.0-0' }} ₽</span>
+                </div>
+            </div>
+            <div class="client-actions">
+                <button class="action-btn primary" (click)="action.emit({ action: 'add_purchase', data: client })">
+                    💰 Добавить покупку
+                </button>
+            </div>
+        </div>
+        }
+    </div>
+
+    @if (totalPages() > 1) {
+    <div class="pagination">
+        <button [disabled]="page() === 1" (click)="prevPage()">←</button>
+        <span>{{ page() }} / {{ totalPages() }}</span>
+        <button [disabled]="page() === totalPages()" (click)="nextPage()">→</button>
+    </div>
+    }
+</div>

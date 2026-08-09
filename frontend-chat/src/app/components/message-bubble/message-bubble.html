@@ -1,0 +1,68 @@
+<div class="bubble-wrapper" [class.user]="message.sender === 'user'">
+    @if (message.sender === 'bot') {
+    <div class="avatar">🤖</div>
+    }
+
+    <div class="bubble" [class.user-bubble]="message.sender === 'user'" [class.bot-bubble]="message.sender === 'bot'">
+        @if (message.text) {
+        <div class="bubble-text" [innerHTML]="formatText(message.text)"></div>
+        }
+
+        @if (message.type === 'buttons' && message.buttons) {
+        <div class="buttons-grid">
+            @for (btn of message.buttons; track btn.id) {
+            <button class="btn" [class]="getBtnClass(btn)" [disabled]="btn.disabled"
+                (click)="buttonClick.emit({ action: btn.action, data: btn.data })">
+                @if (btn.icon) { <span class="btn-icon">{{ btn.icon }}</span> }
+                <span>{{ btn.label }}</span>
+            </button>
+            }
+        </div>
+        }
+
+        @if (message.type === 'menu' && message.menuData) {
+        <div class="menu-title" [innerHTML]="formatText(message.text || '')"></div>
+        <div class="menu-grid">
+            @for (btn of message.menuData.buttons; track btn.id) {
+            <button class="menu-btn" [class]="getBtnClass(btn)"
+                (click)="buttonClick.emit({ action: btn.action, data: btn.data })">
+                <span class="menu-icon">{{ btn.icon || '⚙️' }}</span>
+                <span class="menu-label">{{ btn.label }}</span>
+            </button>
+            }
+        </div>
+        }
+
+        @if (message.type === 'card' && message.cardData) {
+        <div class="card-wrapper">
+            @switch (message.cardData.type) {
+            @case ('stats') {
+            <app-agent-stats [stats]="message.cardData.data" />
+            }
+            @case ('clients_list') {
+            <app-agent-clients [clients]="message.cardData.data" (action)="buttonClick.emit($event)" />
+            }
+            @case ('add_client_form') {
+            <app-add-client (submitted)="buttonClick.emit({ action: 'client_added', data: $event })" />
+            }
+            @case ('add_purchase_form') {
+            <app-add-purchase [client]="message.cardData.data"
+                (submitted)="buttonClick.emit({ action: 'purchase_added', data: $event })" />
+            }
+            @case ('referral') {
+            <app-referral-section [stats]="message.cardData.data" [url]="message.cardData.url" />
+            }
+            @case ('qr') {
+            <app-qr-display [client]="message.cardData.data" />
+            }
+            }
+        </div>
+        }
+
+        <div class="time">{{ message.timestamp | date:'HH:mm' }}</div>
+    </div>
+
+    @if (message.sender === 'user') {
+    <div class="avatar user-avatar">👤</div>
+    }
+</div>

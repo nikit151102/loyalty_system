@@ -58,3 +58,27 @@ async def get_agent_by_referral_code(
         "status": agent.status.value if hasattr(agent.status, "value") else agent.status,
         "total_clients": agent.total_clients,
     }
+
+
+
+@router.get("/by-phone/{phone}", dependencies=[Depends(verify_api_key)])
+async def get_agent_by_phone(phone: str, session: AsyncSession = Depends(get_session)):
+    """Поиск агента по номеру телефона"""
+    from sqlalchemy import select
+    from models.db_models import Agent
+    
+    agent = (await session.execute(
+        select(Agent).where(Agent.phone == phone)
+    )).scalar_one_or_none()
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Агент не найден")
+    
+    return {
+        "id": agent.id,
+        "max_user_id": agent.max_user_id,
+        "phone": agent.phone,
+        "email": agent.email,
+        "status": agent.status.value if hasattr(agent.status, "value") else agent.status,
+        "referral_code": agent.referral_code,
+    }

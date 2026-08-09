@@ -1,0 +1,30 @@
+<div class="phone-input-wrapper fade-in-up">
+  <div class="avatar">👤</div>
+  <div class="input-card">
+    <label class="label">Введите номер телефона</label>
+    <div class="input-row">
+      <span class="prefix">+7</span>
+      <input
+        type="tel"
+        [(ngModel)]="phone"
+        mask="(000) 000-00-00"
+        placeholder="(999) 123-45-67"
+        (input)="onInput()"
+        (keyup.enter)="handleSubmit()"
+      />
+    </div>
+    
+    @if (errorMessage) {
+      <div class="error">{{ errorMessage }}</div>
+    }
+    
+    <button
+      class="submit-btn"
+      [disabled]="!isValid"
+      (click)="handleSubmit()"
+    >
+      <span>Отправить</span>
+      <span class="arrow">→</span>
+    </button>
+  </div>
+</div>
