@@ -1,7 +1,7 @@
 """Роутер клиентов"""
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Optional
 from sqlalchemy import select
 from auth import get_current_user, verify_api_key, get_agent_by_user_id
 from database import get_session
