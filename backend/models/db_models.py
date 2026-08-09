@@ -103,13 +103,14 @@ class Client(Base):
     invited_by_client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
     invited_by_agent_id = Column(Integer, ForeignKey("agents.id"), nullable=True)
     is_agent = Column(Boolean, default=False, nullable=False)
+    
+    max_user_id = Column(BigInteger, nullable=True, index=True)
+    
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
     
-    # ИСПРАВЛЕНО: Добавлено имя класса Client. Было "[agent_id]", стало "[Client.agent_id]"
     agent = relationship("Agent", back_populates="clients", foreign_keys="[Client.agent_id]")
     purchases = relationship("Purchase", back_populates="client", cascade="all, delete-orphan")
-
 
 class Purchase(Base):
     __tablename__ = "purchases"

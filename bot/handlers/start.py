@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 def register_start_handlers(dp: Dispatcher, bot, user_states, user_data, api_client):
     
-
     @dp.bot_started()
     async def handle_bot_started(event: BotStarted):
         user = event.user
@@ -52,72 +51,62 @@ def register_start_handlers(dp: Dispatcher, bot, user_states, user_data, api_cli
             await send_agent_menu(bot, chat_id, user_id, name, api_client, token)
             return
         
+        app_status = await api_client.get_application_status(user_id)
+        if app_status and not app_status.get("error"):
+            status = app_status.get("status")
+            if status == "pending":
+                await bot.send_message(
+                    chat_id=chat_id, 
+                    text=f"👋 {name}!\n\n⏳ Ваша заявка на рассмотрении."
+                )
+                return
+        
+        await send_start_menu(bot, chat_id, name)
+    
+    @dp.message_created(Command("start"))
+    async def cmd_start(event: MessageCreated):
+        user = event.message.sender
+        user_id = user.user_id
+        chat_id = event.message.recipient.chat_id
+        name = getattr(user, "first_name", None) or "друг"
+        
+        user_states[user_id] = UserState.IDLE
+        user_data[user_id] = {}
+        
+        # ===== ПЕРЕХВАТ РЕФЕРАЛЬНОГО КОДА из /start XXX =====
+        text = event.message.body.text.strip()
+        referral_code = None
+        
+        if text.startswith("/start ") or text.startswith("/start@"):
+            parts = text.split(maxsplit=1)
+            if len(parts) > 1:
+                referral_code = parts[1].strip()
+                logger.info(f"🔗 РЕФЕРАЛКА через /start! user_id={user_id}, code='{referral_code}'")
+        
+        if referral_code:
+            agent_info = await api_client.get_agent_by_referral(referral_code)
+            
+            if agent_info and not agent_info.get("error"):
+                user_data[user_id] = {
+                    "referral_code": referral_code,
+                    "referrer_agent_info": agent_info
+                }
+                await send_client_referral_menu(bot, chat_id, name, referral_code, agent_info)
+                return
+        
+        # ===== Обычная логика =====
+        token = await api_client.login(user_id)
+        if token:
+            await send_agent_menu(bot, chat_id, user_id, name, api_client, token)
+            return
+        
         await send_start_menu(bot, chat_id, name)
 
 
-        async def send_client_referral_menu(bot, chat_id: int, name: str, referral_code: str, agent_info: dict):
-            """Меню для клиента, пришедшего по рефералке"""
-            text = (
-                f"👋 Здравствуйте, {name}!\n\n"
-                f"🎁 Вы пришли по приглашению агента\n"
-                f"🔑 Код приглашения: `{referral_code}`\n\n"
-                f"**Что можно сделать:**\n"
-                f"• 🛍 Зарегистрироваться как клиент и получать кэшбэк\n"
-                f"• 🚀 Сразу стать агентом и зарабатывать\n\n"
-                f"Выберите действие:"
-            )
-            
-            buttons = [
-                [CallbackButton(text="🛍 Зарегистрироваться как клиент", payload="become_client", intent=Intent.POSITIVE)],
-                [CallbackButton(text="🚀 Стать агентом сразу", payload="become_agent", intent=Intent.DEFAULT)],
-                [CallbackButton(text="❓ Что такое программа?", payload="help", intent=Intent.DEFAULT)],
-            ]
-            
-            attachment = Attachment(type="inline_keyboard", payload=ButtonsPayload(buttons=buttons))
-            await bot.send_message(chat_id=chat_id, text=text, attachments=[attachment])
-            
-        @dp.message_created(Command("start"))
-        async def cmd_start(event: MessageCreated):
-            user = event.message.sender
-            user_id = user.user_id
-            chat_id = event.message.recipient.chat_id
-            name = getattr(user, "first_name", None) or "друг"
-            
-            user_states[user_id] = UserState.IDLE
-            user_data[user_id] = {}
-            
-            # ===== 🎯 ПЕРЕХВАТ РЕФЕРАЛЬНОГО КОДА из /start XXX =====
-            # В MAX команда может приходить как /start REF_CODE
-            text = event.message.body.text.strip()
-            referral_code = None
-            
-            # Извлекаем аргумент после /start
-            if text.startswith("/start ") or text.startswith("/start@"):
-                parts = text.split(maxsplit=1)
-                if len(parts) > 1:
-                    referral_code = parts[1].strip()
-                    logger.info(f"🔗 РЕФЕРАЛКА через /start! user_id={user_id}, code='{referral_code}'")
-                    user_data[user_id] = {"referral_code": referral_code}
-            
-            if referral_code:
-                await bot.send_message(
-                    chat_id=chat_id,
-                    text=f"👋 {name}!\n\n"
-                        f"Вы пришли по приглашению (код: `{referral_code}`)."
-                )
-            else:
-                logger.info(f"👤 Обычный /start от user_id={user_id}")
-            
-            # ===== Обычная логика =====
-            token = await api_client.login(user_id)
-            if token:
-                await send_agent_menu(bot, chat_id, user_id, name, api_client, token)
-                return
-            
-            await send_start_menu(bot, chat_id, name)
+# ===== ФУНКЦИИ ОТОБРАЖЕНИЯ МЕНЮ =====
 
-
-async def send_start_menu(bot, chat_id, name):
+async def send_start_menu(bot, chat_id: int, name: str):
+    """Стартовое меню для новых пользователей"""
     text = (
         f"👋 Здравствуйте, {name}!\n\n"
         "Я бот программы лояльности.\n\n"
@@ -138,7 +127,30 @@ async def send_start_menu(bot, chat_id, name):
     await bot.send_message(chat_id=chat_id, text=text, attachments=[attachment])
 
 
-async def send_agent_menu(bot, chat_id, user_id, name, api_client, token):
+async def send_client_referral_menu(bot, chat_id: int, name: str, referral_code: str, agent_info: dict):
+    """Меню для пользователя, пришедшего по рефералке"""
+    text = (
+        f"👋 Здравствуйте, {name}!\n\n"
+        f"🎁 Вы пришли по приглашению агента\n"
+        f"🔑 Код приглашения: `{referral_code}`\n\n"
+        f"**Что можно сделать:**\n"
+        f"• 🛍 Зарегистрироваться как клиент и получать кэшбэк\n"
+        f"• 🚀 Сразу стать агентом и зарабатывать\n\n"
+        f"Выберите действие:"
+    )
+    
+    buttons = [
+        [CallbackButton(text="🛍 Зарегистрироваться как клиент", payload="become_client", intent=Intent.POSITIVE)],
+        [CallbackButton(text="🚀 Стать агентом сразу", payload="become_agent", intent=Intent.DEFAULT)],
+        [CallbackButton(text="❓ Что такое программа?", payload="help", intent=Intent.DEFAULT)],
+    ]
+    
+    attachment = Attachment(type="inline_keyboard", payload=ButtonsPayload(buttons=buttons))
+    await bot.send_message(chat_id=chat_id, text=text, attachments=[attachment])
+
+
+async def send_agent_menu(bot, chat_id: int, user_id: int, name: str, api_client, token: str):
+    """Меню для одобренного агента"""
     profile = await api_client.get_my_profile(token)
     if not profile or profile.get("error"):
         await bot.send_message(chat_id=chat_id, text=f"👋 {name}!\n\nНе удалось получить профиль.")

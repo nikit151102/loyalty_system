@@ -11,13 +11,17 @@ from config import settings
 class ClientService:
     
     @staticmethod
-    async def create_client(session: AsyncSession, agent_id: int, full_name: str, phone: str,
-                           email: Optional[str] = None, inn: Optional[str] = None,
-                           client_type: ClientType = ClientType.INDIVIDUAL,
-                           invited_by_client_id: Optional[int] = None,
-                           invited_by_agent_id: Optional[int] = None) -> Client:
+    async def create_client(
+        session: AsyncSession, agent_id: int, full_name: str, phone: str,
+        email: Optional[str] = None, inn: Optional[str] = None,
+        client_type: ClientType = ClientType.INDIVIDUAL,
+        invited_by_client_id: Optional[int] = None,
+        invited_by_agent_id: Optional[int] = None,
+        max_user_id: Optional[int] = None  # ✅ НОВОЕ
+    ) -> Client:
         existing = (await session.execute(select(Client).where(Client.phone == phone))).scalar_one_or_none()
-        if existing: raise ValueError("Клиент с таким телефоном уже существует")
+        if existing:
+            raise ValueError("Клиент с таким телефоном уже существует")
         
         referral_code = "CL-" + shortuuid.uuid()[:8].upper()
         referral_link = f"{settings.BASE_REFERRAL_URL}?ref={referral_code}"
@@ -26,6 +30,7 @@ class ClientService:
         qr.add_data(referral_link)
         qr.make(fit=True)
         img = qr.make_image(fill_color="black", back_color="white")
+        
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
         buffer.seek(0)
@@ -34,7 +39,9 @@ class ClientService:
         client = Client(
             agent_id=agent_id, full_name=full_name, phone=phone, email=email, inn=inn,
             client_type=client_type, qr_code_base64=qr_base64, referral_code=referral_code,
-            invited_by_client_id=invited_by_client_id, invited_by_agent_id=invited_by_agent_id)
+            invited_by_client_id=invited_by_client_id, invited_by_agent_id=invited_by_agent_id,
+            max_user_id=max_user_id  # ✅ ПЕРЕДАЁМ MAX_USER_ID
+        )
         session.add(client)
         await session.flush()
         
@@ -42,7 +49,7 @@ class ClientService:
         if agent:
             agent.total_clients = (agent.total_clients or 0) + 1
         return client
-    
+
     @staticmethod
     async def get_client_by_id(session: AsyncSession, client_id: int) -> Optional[Client]:
         return (await session.execute(select(Client).where(Client.id == client_id))).scalar_one_or_none()

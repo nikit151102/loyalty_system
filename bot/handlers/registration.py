@@ -68,8 +68,6 @@ def register_registration_handlers(dp: Dispatcher, bot, user_states, user_data):
             err = result.get("error", "Неизвестная ошибка") if result else "Ошибка"
             await bot.send_message(chat_id=chat_id, text=f"❌ Ошибка: {err}")
     
-    @dp.message_created(F.message.body.text)
-    async def handle_text(event: MessageCreated):
         text = event.message.body.text.strip()
         user_id = event.message.sender.user_id
         chat_id = event.message.recipient.chat_id

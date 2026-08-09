@@ -83,7 +83,8 @@ class ClientCreateRequest(BaseModel):
     client_type: str = "individual"
     invited_by_client_id: Optional[int] = None
     invited_by_agent_id: Optional[int] = None
-    
+    max_user_id: Optional[int] = None
+
     @field_validator("phone")
     @classmethod
     def validate_phone(cls, v: str) -> str:
@@ -116,6 +117,8 @@ class ClientResponse(BaseModel):
     total_purchases_amount: float
     purchases_count: int
     created_at: datetime
+    max_user_id: Optional[int] = None
+    
     class Config:
         from_attributes = True
 
