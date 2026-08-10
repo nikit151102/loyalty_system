@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, OnInit, signal } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, signal } from '@angular/core';
 import { Client } from '../../models/client.model';
 
 @Component({
@@ -8,22 +8,25 @@ import { Client } from '../../models/client.model';
   templateUrl: './qr-display.html',
   styleUrl: './qr-display.scss',
 })
-export class QrDisplay implements OnInit {
+export class QrDisplay implements OnChanges {
   @Input() client!: Client;
   qrDataUrl = signal<string>('');
 
-  ngOnInit(): void {
-    if (this.client?.qr_code_base64) {
-      this.qrDataUrl.set(`data:image/png;base64,${this.client.qr_code_base64}`);
-    } else {
-      // Generate simple QR placeholder using a library if available
-      this.generateQR();
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['client'] && this.client) {
+      console.log('Клиент получен:', this.client);
+      console.table(this.client);
+      console.log('Клиент (JSON):', JSON.stringify(this.client, null, 2));
+
+      if (this.client.qr_code_base64) {
+        this.qrDataUrl.set(`data:image/png;base64,${this.client.qr_code_base64}`);
+      } else {
+        this.generateQR();
+      }
     }
   }
 
   private async generateQR(): Promise<void> {
-    // For production, use 'qrcode' npm package
-    // Here we just show a placeholder with client data
     this.qrDataUrl.set(`data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><rect width='200' height='200' fill='%23327120'/><text x='50%25' y='50%25' text-anchor='middle' fill='white' font-size='20'>QR ${this.client?.referral_code || ''}</text></svg>`);
   }
 

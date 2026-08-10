@@ -31,14 +31,57 @@ export class Chat {
     inn: ''
   };
 
+  // Храним текущий введенный номер телефона для использования до авторизации
+  private _currentPhone: string | null = null;
+
   constructor() {
+    this._initReferralCode();
+    this._checkExistingSession();
+  }
+
+  private _initReferralCode(): void {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const ref = urlParams.get('ref') || urlParams.get('start');
+      if (ref) {
+        this.registrationData.referral_code = ref;
+        console.log('🎁 Реферальный код из URL:', ref);
+      }
+    }
+  }
+
+  private async _checkExistingSession(): Promise<void> {
+    if (this.auth.isLoggedIn()) {
+      const role = this.auth.role();
+      const phone = this.auth.phone();
+      
+      if (role && phone) {
+        this.state.set('checking_phone');
+        try {
+          const loginRes = await firstValueFrom(this.api.login({ phone, role }));
+          if (loginRes?.access_token) {
+            await this._handleSuccessfulLogin(loginRes, phone);
+            return; 
+          }
+        } catch (e) {
+          console.warn('Сессия недействительна, выполняем выход');
+          this.auth.logout();
+        }
+      }
+    }
     this.initFlow();
   }
 
   private async initFlow(): Promise<void> {
-    await this.addBotMessage(`Привет! 👋 Я ${this.config.BOT_NAME} — помощник программы лояльности.`);
-    await this.delay(600);
-    await this.addBotMessage('Введите ваш номер телефона, чтобы продолжить:');
+    if (this.registrationData.referral_code) {
+      await this.addBotMessage(`Привет! 👋 Я ${this.config.BOT_NAME} — помощник программы лояльности.`);
+      await this.delay(400);
+      await this.addBotMessage(`🎁 Вы перешли по реферальной ссылке!\nЧтобы стать клиентом программы, введите ваш номер телефона:`);
+    } else {
+      await this.addBotMessage(`Привет! 👋 Я ${this.config.BOT_NAME} — помощник программы лояльности.`);
+      await this.delay(600);
+      await this.addBotMessage('Введите ваш номер телефона, чтобы продолжить:');
+    }
     this.state.set('asking_phone');
   }
 
@@ -77,40 +120,49 @@ export class Chat {
   }
 
   // ==================== PUBLIC ACTIONS ====================
-
   private readonly TOKEN_KEY = 'loyalty_token';
 
   async submitPhone(phone: string): Promise<void> {
+    // ИСПРАВЛЕНО: Сохраняем номер телефона сразу при вводе
+    this._currentPhone = phone;
     this.addUserMessage(phone);
     this.state.set('checking_phone');
 
     await this.addBotMessage('🔍 Проверяю данные в базе...');
+    const hasReferral = !!this.registrationData.referral_code;
 
     try {
       const loginRes = await firstValueFrom(this.api.login({ phone }));
 
+      if (loginRes?.status === 'choose_role') {
+        await this.addBotMessage(`📋 Номер **${phone}** зарегистрирован и как агент, и как клиент.\n\nВыберите, в какой роли вы хотите войти:`);
+        await this.addBotMessage('', {
+          type: 'buttons',
+          buttons: [
+            { id: 'login_as_agent', label: `Войти как Агент`, action: 'login_as_agent', variant: 'primary' },
+            { id: 'login_as_client', label: `Войти как Клиент`, action: 'login_as_client', variant: 'outline' }
+          ]
+        });
+        return;
+      }
+
       if (loginRes?.access_token) {
-        localStorage.setItem(this.TOKEN_KEY, loginRes?.access_token)
-        if (loginRes.role === 'agent') {
-          const agent = await firstValueFrom(this.api.getMyProfile());
-          this.auth.setAuth(loginRes.access_token, agent, phone, 'agent');
-          this.currentUser = agent;
-
-          await this.delay(400);
-          await this.addBotMessage(`Рады видеть вас снова, ${agent.email?.split('@')[0] || 'Агент'}! 👋`);
-          await this.showAgentMenu();
+        localStorage.setItem(this.TOKEN_KEY, loginRes.access_token);
+        
+        if (hasReferral && loginRes.role === 'agent') {
+          await this.addBotMessage(`⚠️ Этот номер уже зарегистрирован как **Агент**.\n\nНо вы перешли по реферальной ссылке! Хотите также зарегистрироваться как **Клиент** этого агента?`);
+          await this.addBotMessage('', {
+            type: 'buttons',
+            buttons: [
+              { id: 'reg_as_client_anyway', label: '✅ Да, стать клиентом', action: 'reg_as_client_anyway', variant: 'primary' },
+              { id: 'enter_as_agent', label: '👔 Нет, войти как Агент', action: 'enter_as_agent', variant: 'outline' }
+            ]
+          });
           return;
         }
-        else if (loginRes.role === 'client') {
-          const client = await firstValueFrom(this.api.getMyClientProfile());
-          this.auth.setAuth(loginRes.access_token, client, phone, 'client');
-          this.currentUser = client;
 
-          await this.delay(400);
-          await this.addBotMessage(`Добро пожаловать! Вы уже являетесь клиентом программы. 🎉`);
-          await this.showClientMenu(client);
-          return;
-        }
+        await this._handleSuccessfulLogin(loginRes, phone);
+        return;
       }
     } catch (loginError: any) {
       if (loginError.status === 404) {
@@ -123,92 +175,64 @@ export class Chat {
       }
     }
 
-    try {
-      const app = await firstValueFrom(this.api.getApplicationByPhone(phone));
-
-      if (app) {
-        this.currentApplication = app;
-
-        if (app.status === 'pending') {
-          await this.addBotMessage(`📋 У вас уже есть заявка на рассмотрении. Статус: **⏳ На рассмотрении**`);
-          await this.showPendingStatus();
-          return;
-        }
-        else if (app.status === 'rejected') {
-          await this.addBotMessage(`❌ Ваша заявка была отклонена. Причина: ${app.rejection_reason || 'не указана'}`);
-          await this.addBotMessage('Хотите подать новую заявку?');
-          this.state.set('agent_rejected');
-          await this.addBotMessage('', {
-            type: 'buttons',
-            buttons: [
-              { id: 'reregister', label: '🔄 Подать заявку снова', action: 'reregister', variant: 'primary' },
-              { id: 'back', label: '← Назад', action: 'back', variant: 'outline' }
-            ]
-          });
-          return;
-        }
-        else if (app.status === 'approved') {
-          await this.addBotMessage(`✅ Ваша заявка одобрена! Добро пожаловать в систему! 🎉`);
-
-          let agentData: Agent | null = null;
-          let token: string | null = null;
-
-          try {
-            const retryLogin = await firstValueFrom(this.api.login({ phone }));
-            if (retryLogin?.access_token) {
-              token = retryLogin.access_token;
-              agentData = await firstValueFrom(this.api.getMyProfile());
+    if (!hasReferral) {
+      try {
+        const app = await firstValueFrom(this.api.getApplicationByPhone(phone));
+        if (app) {
+          this.currentApplication = app;
+          if (app.status === 'pending') {
+            await this.addBotMessage(`📋 У вас уже есть заявка на рассмотрении. Статус: **⏳ На рассмотрении**`);
+            await this.showPendingStatus();
+            return;
+          } else if (app.status === 'rejected') {
+            await this.addBotMessage(`❌ Ваша заявка была отклонена. Причина: ${app.rejection_reason || 'не указана'}`);
+            await this.addBotMessage('Хотите подать новую заявку?');
+            this.state.set('agent_rejected');
+            await this.addBotMessage('', {
+              type: 'buttons',
+              buttons: [
+                { id: 'reregister', label: '🔄 Подать заявку снова', action: 'reregister', variant: 'primary' },
+                { id: 'back', label: '← Назад', action: 'back', variant: 'outline' }
+              ]
+            });
+            return;
+          } else if (app.status === 'approved') {
+            await this.addBotMessage(`✅ Ваша заявка одобрена! Добро пожаловать в систему! 🎉`);
+            let agentData: Agent | null = null;
+            let token: string | null = null;
+            try {
+              const retryLogin = await firstValueFrom(this.api.login({ phone }));
+              if (retryLogin?.access_token) {
+                token = retryLogin.access_token;
+                agentData = await firstValueFrom(this.api.getMyProfile());
+              }
+            } catch (retryError) {
+              console.warn('Агент еще не создан в БД бэкендом, используем данные заявки для UI');
             }
-          } catch (retryError) {
-            console.warn('Агент еще не создан в БД бэкендом, используем данные заявки для UI');
+            if (!agentData) {
+              agentData = {
+                id: app.agent_id || 0, max_user_id: app.max_user_id || this.phoneToId(phone),
+                phone: app.phone, email: app.email, registration_type: app.registration_type,
+                status: 'active' as any, referral_code: 'GENERATING', balance: 0, total_clients: 0,
+                total_purchases_amount: 0, total_commission_earned: 0, total_referrals_count: 0,
+                created_at: new Date().toISOString(), updated_at: new Date().toISOString(), approved_at: new Date().toISOString()
+              } as Agent;
+            }
+            if (token) this.auth.setAuth(token, agentData, phone, 'agent');
+            else { this.auth.user.set(agentData); this.auth.role.set('agent'); this.auth.phone.set(phone); }
+            this.currentUser = agentData;
+            await this.delay(400);
+            await this.addBotMessage(`Рады видеть вас, ${agentData.email?.split('@')[0] || 'Агент'}! 👋`);
+            await this.showAgentMenu();
+            return;
           }
-
-          if (!agentData) {
-            agentData = {
-              id: app.agent_id || 0,
-              max_user_id: app.max_user_id || this.phoneToId(phone),
-              phone: app.phone,
-              email: app.email,
-              registration_type: app.registration_type,
-              status: 'active' as any,
-              referral_code: 'GENERATING',
-              balance: 0,
-              total_clients: 0,
-              total_purchases_amount: 0,
-              total_commission_earned: 0,
-              total_referrals_count: 0,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              approved_at: new Date().toISOString()
-            } as Agent;
-          }
-
-          if (token) {
-            this.auth.setAuth(token, agentData, phone, 'agent');
-          } else {
-            this.auth.user.set(agentData);
-            this.auth.role.set('agent');
-            this.auth.phone.set(phone);
-          }
-
-          this.currentUser = agentData;
-
-          await this.delay(400);
-          await this.addBotMessage(`Рады видеть вас, ${agentData.email?.split('@')[0] || 'Агент'}! 👋`);
-          await this.showAgentMenu();
-          return;
         }
+      } catch (appError: any) {
+        console.log('Application not found, starting registration...');
       }
-    } catch (appError: any) {
-      console.log('Application not found, starting registration...');
     }
 
-    // ИСПРАВЛЕНО: Поддержка и ?ref= и ?start=
-    const urlParams = new URLSearchParams(window.location.search);
-    const referralCode = urlParams.get('ref') || urlParams.get('start');
-
-    if (referralCode) {
-      this.registrationData.referral_code = referralCode;
+    if (hasReferral) {
       await this.addBotMessage(`🎁 Вы перешли по реферальной ссылке! Давайте оформим вас как клиента программы.`);
       await this.startClientRegistration();
     } else {
@@ -226,11 +250,36 @@ export class Chat {
 
   async handleButtonAction(action: string, data?: any): Promise<void> {
     switch (action) {
+      // ИСПРАВЛЕНО: Используем this._currentPhone вместо this.auth.phone()
+      case 'login_as_agent':
+        if (this._currentPhone) await this._loginWithRole(this._currentPhone, 'agent');
+        break;
+      case 'login_as_client':
+        if (this._currentPhone) await this._loginWithRole(this._currentPhone, 'client');
+        break;
+      case 'reg_as_client_anyway':
+        await this.addBotMessage('Отлично! Начинаем регистрацию клиента...');
+        await this.startClientRegistration();
+        break;
+      case 'enter_as_agent':
+        if (this._currentPhone) await this._loginWithRole(this._currentPhone, 'agent');
+        break;
+      
+      // === ПЕРЕКЛЮЧЕНИЕ МЕЖДУ РОЛЯМИ ===
+      case 'switch_to_client':
+        await this._switchToClient();
+        break;
+      case 'switch_to_agent':
+        await this._switchToAgent();
+        break;
+      // ==========================================
+
       case 'start_register':
         await this.startAgentRegistration();
         break;
       case 'reregister':
         this.auth.logout();
+        this._currentPhone = null;
         await this.startAgentRegistration();
         break;
       case 'back':
@@ -259,6 +308,7 @@ export class Chat {
         break;
       case 'logout':
         this.auth.logout();
+        this._currentPhone = null;
         this.goToWelcome();
         break;
       case 'select_type':
@@ -279,11 +329,77 @@ export class Chat {
     }
   }
 
+  // ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
+
+  private async _loginWithRole(phone: string, role: 'agent' | 'client'): Promise<void> {
+    this.state.set('checking_phone');
+    await this.addBotMessage(`🔄 Выполняю вход в роли: ${role === 'agent' ? 'Агент' : 'Клиент'}...`);
+    try {
+      const loginRes = await firstValueFrom(this.api.login({ phone, role }));
+      if (loginRes?.access_token) await this._handleSuccessfulLogin(loginRes, phone);
+      else throw new Error('Не удалось получить токен');
+    } catch (error: any) {
+      await this.addBotMessage(`⚠️ Не удалось войти в выбранной роли.`);
+      this.state.set('asking_phone');
+    }
+  }
+
+  private async _switchToClient(): Promise<void> {
+    const phone = this.auth.phone() || this._currentPhone;
+    if (!phone) { this.goToWelcome(); return; }
+    
+    this.state.set('checking_phone');
+    await this.addBotMessage('🔄 Переключаю в режим Клиента...');
+    try {
+      const loginRes = await firstValueFrom(this.api.login({ phone, role: 'client' }));
+      await this._handleSuccessfulLogin(loginRes, phone);
+    } catch (e) {
+      await this.addBotMessage('❌ Не удалось переключиться.');
+      await this.showAgentMenu();
+    }
+  }
+
+  private async _switchToAgent(): Promise<void> {
+    const phone = this.auth.phone() || this._currentPhone;
+    if (!phone) { this.goToWelcome(); return; }
+    
+    this.state.set('checking_phone');
+    await this.addBotMessage('🔄 Переключаю в режим Агента...');
+    try {
+      const loginRes = await firstValueFrom(this.api.login({ phone, role: 'agent' }));
+      await this._handleSuccessfulLogin(loginRes, phone);
+    } catch (e) {
+      await this.addBotMessage('❌ Не удалось переключиться.');
+      await this.showClientMenu(this.currentUser as Client);
+    }
+  }
+
+  private async _handleSuccessfulLogin(loginRes: any, phone: string): Promise<void> {
+    localStorage.setItem('loyalty_token', loginRes.access_token)
+    if (loginRes.role === 'agent') {
+      const agent = await firstValueFrom(this.api.getMyProfile());
+      this.auth.setAuth(loginRes.access_token, agent, phone, 'agent');
+      this.currentUser = agent;
+      await this.delay(400);
+      await this.addBotMessage(`Рады видеть вас снова, ${agent.email?.split('@')[0] || 'Агент'}! 👋`);
+      await this.showAgentMenu();
+    } 
+    else if (loginRes.role === 'client') {
+      const client = await firstValueFrom(this.api.getMyClientProfile());
+      this.auth.setAuth(loginRes.access_token, client, phone, 'client');
+      this.currentUser = client;
+      await this.delay(400);
+      await this.addBotMessage(`Добро пожаловать, ${client.full_name || 'Клиент'}! 🎉`);
+      await this.showClientMenu(client);
+    }
+  }
+
   // ==================== AGENT REGISTRATION FLOW ====================
 
   private async startAgentRegistration(): Promise<void> {
     this.registrationStep.set(1);
-    this.registrationData = { phone: '', email: '', city: '', registration_type: '', referral_code: null };
+    const savedRef = this.registrationData.referral_code;
+    this.registrationData = { phone: '', email: '', city: '', registration_type: '', referral_code: savedRef, inn: '' };
     this.state.set('checking_phone');
     await this.addBotMessage('Отлично! Давайте заполним анкету. Шаг 1 из 5.\n\n📱 **Ваш номер телефона:**');
     this.state.set('agent_registration');
@@ -320,11 +436,7 @@ export class Chat {
   }
 
   private async confirmRegistration(): Promise<void> {
-    const typeLabels: any = {
-      'self_employed': '👨‍💼 Самозанятый',
-      'ip': '💼 Индивидуальный предприниматель',
-      'legal_entity': '🏛 Юридическое лицо'
-    };
+    const typeLabels: any = { 'self_employed': '👨‍💼 Самозанятый', 'ip': '💼 Индивидуальный предприниматель', 'legal_entity': '🏛 Юридическое лицо' };
     await this.addBotMessage(`📋 **Шаг 5: Проверьте данные**\n\n📱 Телефон: ${this.registrationData.phone}\n📧 Email: ${this.registrationData.email}\n🏙️ Город: ${this.registrationData.city}\n🏢 Статус: ${typeLabels[this.registrationData.registration_type]}\n\nВсё верно?`);
     await this.addBotMessage('', {
       type: 'buttons',
@@ -341,15 +453,12 @@ export class Chat {
     try {
       const maxUserId = this.phoneToId(this.registrationData.phone);
       const app = await firstValueFrom(this.api.registerAgent({
-        max_user_id: maxUserId,
-        phone: this.registrationData.phone,
-        email: this.registrationData.email,
-        city: this.registrationData.city,
-        registration_type: this.registrationData.registration_type,
+        max_user_id: maxUserId, phone: this.registrationData.phone, email: this.registrationData.email,
+        city: this.registrationData.city, registration_type: this.registrationData.registration_type,
         referral_code: this.registrationData.referral_code
       }));
       this.currentApplication = app;
-      await this.addBotMessage(`✅ **Заявка успешно отправлена!** 🎉\n\nНомер заявки: #${app.id}\nМы рассмотрим её в ближайшее время.\n\nВы можете проверять статус в любой момент.`);
+      await this.addBotMessage(`✅ **Заявка успешно отправлена!** 🎉\n\nНомер заявки: #${app.id}\nМы рассмотрим её в ближайшее время.`);
       this.state.set('agent_pending');
       await this.showPendingStatus();
     } catch (e: any) {
@@ -387,16 +496,14 @@ export class Chat {
 
       try {
         const client = await firstValueFrom(this.api.registerClient({
-          full_name: `Клиент ${this.registrationData.phone}`, // ← ДОБАВЛЕНО: Временное имя
-          inn: this.registrationData.inn,
-          phone: this.registrationData.phone,
-          email: this.registrationData.email,
-          referral_code: this.registrationData.referral_code,
-          client_type: 'individual' // ← ДОБАВЛЕНО: Тип клиента
+          full_name: `Клиент ${this.registrationData.phone}`,
+          inn: this.registrationData.inn, phone: this.registrationData.phone,
+          email: this.registrationData.email, referral_code: this.registrationData.referral_code,
+          client_type: 'individual'
         }));
 
         this.toast.success('Клиент успешно зарегистрирован! 🎉');
-        this.currentUser = client.client || client; // бэкенд может вернуть { client, access_token }
+        this.currentUser = client.client || client;
 
         if (client.access_token) {
           this.auth.setAuth(client.access_token, client.client || client, this.registrationData.phone, 'client');
@@ -415,35 +522,87 @@ export class Chat {
 
   private async showAgentMenu(): Promise<void> {
     this.state.set('agent_menu');
+    
+    let isAlsoClient = false;
+    const phone = this.auth.phone() || this._currentPhone;
+    if (phone) {
+      try {
+        const res = await firstValueFrom(this.api.login({ phone, role: 'client' }));
+        if (res?.access_token) {
+          isAlsoClient = true;
+        }
+      } catch (e) {
+        isAlsoClient = false;
+      }
+    }
+
+    const buttons: any[] = [];
+    
+    if (isAlsoClient) {
+      buttons.push({ 
+        id: 'switch_to_client', 
+        label: 'Переключить в режим Клиента', 
+        action: 'switch_to_client', 
+        variant: 'secondary', 
+        icon: '🔄' 
+      });
+    }
+
+    buttons.push(
+      { id: 'm1', label: 'Статистика', action: 'show_stats', variant: 'primary', icon: '📊' },
+      { id: 'm2', label: 'Мои клиенты', action: 'show_clients', variant: 'primary', icon: '👥' },
+      { id: 'm3', label: 'Добавить клиента', action: 'add_client', variant: 'primary', icon: '➕' },
+      { id: 'm4', label: 'Реферальная ссылка', action: 'show_referral', variant: 'primary', icon: '🔗' },
+      { id: 'm5', label: 'Статус заявки', action: 'check_status', variant: 'outline', icon: '📋' },
+      { id: 'm6', label: 'Выйти', action: 'logout', variant: 'danger', icon: '🚪' }
+    );
+
     await this.addBotMessage('', {
       type: 'menu',
-      text: '🏠 **Главное меню агента**\n\nВыберите действие:',
-      menuData: {
-        buttons: [
-          { id: 'm1', label: '📊 Статистика', action: 'show_stats', variant: 'primary', icon: '📊' },
-          { id: 'm2', label: '👥 Мои клиенты', action: 'show_clients', variant: 'primary', icon: '👥' },
-          { id: 'm3', label: '➕ Добавить клиента', action: 'add_client', variant: 'primary', icon: '➕' },
-          { id: 'm4', label: '🔗 Реферальная ссылка', action: 'show_referral', variant: 'primary', icon: '🔗' },
-          { id: 'm5', label: '📋 Статус заявки', action: 'check_status', variant: 'outline', icon: '📋' },
-          { id: 'm6', label: '🚪 Выйти', action: 'logout', variant: 'danger', icon: '🚪' }
-        ]
-      }
+      text: '🏠 **Главное меню АГЕНТА**\n\nВыберите действие:',
+      menuData: { buttons }
     });
   }
 
   private async showClientMenu(client: Client): Promise<void> {
     this.state.set('client_menu');
+    
+    let isAlsoAgent = false;
+    const phone = this.auth.phone() || this._currentPhone;
+    if (phone) {
+      try {
+        const res = await firstValueFrom(this.api.login({ phone, role: 'agent' }));
+        if (res?.access_token) {
+          isAlsoAgent = true;
+        }
+      } catch (e) {
+        isAlsoAgent = false;
+      }
+    }
+
+    const buttons: any[] = [];
+    
+    if (isAlsoAgent) {
+      buttons.push({ 
+        id: 'switch_to_agent', 
+        label: 'Переключить в режим Агента', 
+        action: 'switch_to_agent', 
+        variant: 'secondary', 
+        icon: '🔄' 
+      });
+    }
+
+    buttons.push(
+      { id: 'c1', label: 'Мой QR-код', action: 'show_qr', variant: 'primary', icon: '🎫', data: client },
+      { id: 'c2', label: 'История покупок', action: 'show_history', variant: 'primary', icon: '📜', data: client },
+      { id: 'c3', label: 'Мой профиль', action: 'show_profile', variant: 'outline', icon: '👤', data: client },
+      { id: 'c4', label: 'Выйти', action: 'logout', variant: 'danger', icon: '🚪' }
+    );
+
     await this.addBotMessage('', {
       type: 'menu',
-      text: `🏠 **Меню клиента**\n\n👤 ${client.full_name}\n📱 ${client.phone}`,
-      menuData: {
-        buttons: [
-          { id: 'c1', label: '🎫 Мой QR-код', action: 'show_qr', variant: 'primary', icon: '🎫', data: client },
-          { id: 'c2', label: '📜 История покупок', action: 'show_history', variant: 'primary', icon: '📜', data: client },
-          { id: 'c3', label: '👤 Мой профиль', action: 'show_profile', variant: 'outline', icon: '👤', data: client },
-          { id: 'c4', label: '🚪 Выйти', action: 'logout', variant: 'danger', icon: '🚪' }
-        ]
-      }
+      text: `**Меню КЛИЕНТА**\n\n${client.full_name}\n${client.phone}`,
+      menuData: { buttons }
     });
   }
 
@@ -452,7 +611,7 @@ export class Chat {
     await this.addBotMessage('', {
       type: 'buttons',
       buttons: [
-        { id: 's1', label: '🔄 Обновить статус', action: 'check_status', variant: 'primary' },
+        { id: 's1', label: 'Обновить статус', action: 'check_status', variant: 'primary' },
         { id: 's2', label: '← Назад', action: 'back', variant: 'outline' }
       ]
     });
@@ -460,13 +619,10 @@ export class Chat {
 
   private async showAgentStats(): Promise<void> {
     this.state.set('agent_stats');
-    await this.addBotMessage('📊 Загружаю вашу статистику...');
+    await this.addBotMessage('Загружаю вашу статистику...');
     try {
       const stats = await firstValueFrom(this.api.getMyStats());
-      await this.addBotMessage('', {
-        type: 'card',
-        cardData: { type: 'stats', data: stats }
-      });
+      await this.addBotMessage('', { type: 'card', cardData: { type: 'stats', data: stats } });
       await this.addBackButton();
     } catch (e) {
       this.toast.error('Не удалось загрузить статистику');
@@ -476,21 +632,18 @@ export class Chat {
 
   private async showAgentClients(): Promise<void> {
     this.state.set('agent_clients');
-    await this.addBotMessage('👥 Загружаю список ваших клиентов...');
+    await this.addBotMessage('Загружаю список ваших клиентов...');
     try {
       const clients = await firstValueFrom(this.api.getClients());
       if (clients.length === 0) {
         await this.addBotMessage('У вас пока нет клиентов. Добавьте первого!');
       } else {
-        await this.addBotMessage('', {
-          type: 'card',
-          cardData: { type: 'clients_list', data: clients }
-        });
+        await this.addBotMessage('', { type: 'card', cardData: { type: 'clients_list', data: clients } });
       }
       await this.addBotMessage('', {
         type: 'buttons',
         buttons: [
-          { id: 'a1', label: '➕ Добавить клиента', action: 'add_client', variant: 'primary' },
+          { id: 'a1', label: 'Добавить клиента', action: 'add_client', variant: 'primary' },
           { id: 'a2', label: '← Назад в меню', action: 'back', variant: 'outline' }
         ]
       });
@@ -502,22 +655,17 @@ export class Chat {
 
   private async showReferral(): Promise<void> {
     this.state.set('referral');
-    await this.addBotMessage('🔗 Формирую вашу реферальную ссылку...');
+    await this.addBotMessage('Формирую вашу реферальную ссылку...');
     try {
       const stats = await firstValueFrom(this.api.getReferralStats());
       const agent = this.auth.agent();
-
       if (!agent || !agent.referral_code) {
         this.toast.error('Не удалось получить реферальный код');
         await this.addBackButton();
         return;
       }
-
       const url = `${window.location.origin}?ref=${agent.referral_code}`;
-      await this.addBotMessage('', {
-        type: 'card',
-        cardData: { type: 'referral', data: stats, url }
-      });
+      await this.addBotMessage('', { type: 'card', cardData: { type: 'referral', data: stats, url } });
       await this.addBackButton();
     } catch (e) {
       this.toast.error('Ошибка');
@@ -527,50 +675,39 @@ export class Chat {
 
   private async showQR(client: Client): Promise<void> {
     this.state.set('qr_display');
-    await this.addBotMessage('', {
-      type: 'card',
-      cardData: { type: 'qr', data: client }
-    });
+    await this.addBotMessage('', { type: 'card', cardData: { type: 'qr', data: client } });
     await this.addBackButton();
   }
 
   private async checkApplicationStatus(): Promise<void> {
-    await this.addBotMessage('🔍 Проверяю статус...');
+    await this.addBotMessage('Проверяю статус...');
     if (this.auth.agent()) {
       try {
         const status = await firstValueFrom(this.api.getMyStatus());
-        await this.addBotMessage(`📋 Текущий статус: **${status.status}**\n${status.is_approved ? '✅ Заявка одобрена!' : ''}`);
+        await this.addBotMessage(`Текущий статус: **${status.status}**\n${status.is_approved ? 'Заявка одобрена!' : ''}`);
       } catch (e) {
         this.toast.error('Не удалось проверить статус');
       }
     } else if (this.currentApplication) {
-      await this.addBotMessage(`📋 Статус заявки #${this.currentApplication.id}: **${this.currentApplication.status}**`);
+      await this.addBotMessage(`Статус заявки #${this.currentApplication.id}: **${this.currentApplication.status}**`);
     }
     await this.addBackButton();
   }
 
   private async startAddClient(): Promise<void> {
     this.state.set('add_client');
-    await this.addBotMessage('', {
-      type: 'card',
-      cardData: { type: 'add_client_form' }
-    });
+    await this.addBotMessage('', { type: 'card', cardData: { type: 'add_client_form' } });
   }
 
   private async startAddPurchase(client: Client): Promise<void> {
     this.state.set('add_purchase');
-    await this.addBotMessage('', {
-      type: 'card',
-      cardData: { type: 'add_purchase_form', data: client }
-    });
+    await this.addBotMessage('', { type: 'card', cardData: { type: 'add_purchase_form', data: client } });
   }
 
   private async addBackButton(): Promise<void> {
     await this.addBotMessage('', {
       type: 'buttons',
-      buttons: [
-        { id: 'back', label: '← Назад в меню', action: 'back_to_menu', variant: 'outline' }
-      ]
+      buttons: [{ id: 'back', label: '← Назад в меню', action: 'back_to_menu', variant: 'outline' }]
     });
   }
 
@@ -578,7 +715,7 @@ export class Chat {
     if (this.auth.agent()) {
       await this.showAgentMenu();
     } else {
-      this.goToWelcome();
+      await this.showClientMenu(this.currentUser as Client);
     }
   }
 
@@ -586,6 +723,7 @@ export class Chat {
     this.messages.set([]);
     this.currentUser = null;
     this.currentApplication = null;
+    this._currentPhone = null; // Очищаем при сбросе
     this.initFlow();
   }
 

@@ -11,7 +11,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     'X-API-Key': config.API_KEY
   };
 
-  if (auth.token()) {
+  if (localStorage.getItem('loyalty_token')) {
     headers['Authorization'] = `Bearer ${localStorage.getItem('loyalty_token')}`;
   }
 

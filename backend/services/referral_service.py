@@ -28,6 +28,10 @@ class ReferralService:
         result = await session.execute(query.order_by(Referral.created_at.desc()))
         return list(result.scalars().all())
     
+
+    from difflib import SequenceMatcher
+
+
     @staticmethod
     async def get_referral_stats(session: AsyncSession, agent_id: int) -> dict:
         l1 = list((await session.execute(select(Referral).where(Referral.inviter_agent_id == agent_id, Referral.level == 1))).scalars().all())
@@ -35,7 +39,10 @@ class ReferralService:
         l1_bonus = sum(r.total_bonus_earned or 0 for r in l1)
         l2_bonus = sum(r.total_bonus_earned or 0 for r in l2)
         agent = (await session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
+        
+        # Ссылка формируется из referral_code (уже содержит префикс)
         link = f"{settings.BASE_REFERRAL_URL}?start={agent.referral_code}" if agent else ""
+        
         return {
             "referral_code": agent.referral_code if agent else "",
             "referral_link": link,

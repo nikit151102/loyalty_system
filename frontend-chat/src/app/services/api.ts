@@ -24,7 +24,8 @@ export class Api {
     }
 
     // ==================== AUTH ====================
-    login(payload: { phone: string }): Observable<any> {
+    // ИСПРАВЛЕНО: добавлено опциональное свойство role
+    login(payload: { phone: string; role?: 'agent' | 'client' }): Observable<any> {
         return this.http.post<any>(`${this.config.API_URL}/auth/login`, payload);
     }
 
@@ -48,10 +49,11 @@ export class Api {
 
     // ==================== AGENTS ====================
     getMyProfile(): Observable<any> {
-        return this.http.get<any>(`${this.config.API_URL}/agents/me`); // Или /clients/me, если бэкенд роутит по токену
+        return this.http.get<any>(`${this.config.API_URL}/agents/me`, { headers: this.headers() });
     }
+
     getMyClientProfile(): Observable<any> {
-        return this.http.get<any>(`${this.config.API_URL}/clients/me`); // Или /clients/me, если бэкенд роутит по токену
+        return this.http.get<any>(`${this.config.API_URL}/clients/me`, { headers: this.headers() });
     }
 
     getMyStatus(): Observable<any> {
@@ -59,7 +61,6 @@ export class Api {
     }
 
     getAgentByPhone(phone: string): Observable<Agent | null> {
-        // Note: this endpoint needs to be added to backend
         return this.http.get<Agent>(`${this.config.API_URL}/agents/by-phone/${encodeURIComponent(phone)}`, {
             headers: this.headers()
         }).pipe(catchError(() => of(null)));
@@ -69,7 +70,6 @@ export class Api {
     getMyStats(): Observable<AgentStats> {
         return this.http.get<AgentStats>(`${this.config.API_URL}/statistics/me`, { headers: this.headers() });
     }
-
 
     // ==================== CLIENTS ====================
     getClients(skip = 0, limit = 20): Observable<Client[]> {
@@ -91,20 +91,21 @@ export class Api {
 
     // ==================== PURCHASES ====================
     createPurchase(data: { client_id: number; amount: number; order_number?: string; comment?: string }): Observable<Purchase> {
-        return this.http.post<Purchase>(`${this.config.API_URL}/purchases`, data);
+        return this.http.post<Purchase>(`${this.config.API_URL}/purchases`, data, { headers: this.headers() }); // Добавлены headers для авторизации
     }
 
     getClientPurchases(clientId: number): Observable<Purchase[]> {
-        return this.http.get<Purchase[]>(`${this.config.API_URL}/purchases/client/${clientId}`);
+        return this.http.get<Purchase[]>(`${this.config.API_URL}/purchases/client/${clientId}`, { headers: this.headers() });
     }
 
     // ==================== REFERRALS ====================
     getReferralStats(): Observable<any> {
-        return this.http.get<any>(`${this.config.API_URL}/referrals/me`);
+        return this.http.get<any>(`${this.config.API_URL}/referrals/me`, { headers: this.headers() });
     }
 
     // ==================== QR ====================
     getQRCodeUrl(clientId: number): string {
+        // Лучше использовать заголовок Authorization, но если бэкенд требует в URL:
         return `${this.config.API_URL}/clients/${clientId}/qr?access_token=${this.auth.token()}`;
     }
 
@@ -118,6 +119,4 @@ export class Api {
     }): Observable<any> {
         return this.http.post<any>(`${this.config.API_URL}/clients/register`, data);
     }
-
-
 }
