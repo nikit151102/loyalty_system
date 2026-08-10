@@ -35,7 +35,7 @@ class ReferralService:
         l1_bonus = sum(r.total_bonus_earned or 0 for r in l1)
         l2_bonus = sum(r.total_bonus_earned or 0 for r in l2)
         agent = (await session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
-        link = f"{settings.BASE_REFERRAL_URL}?start={agent.referral_code}" if agent else ""
+        link = f"{settings.BASE_REFERRAL_URL}?start={agent.phone}" if agent else ""
         return {
             "referral_code": agent.referral_code if agent else "",
             "referral_link": link,

@@ -77,16 +77,21 @@ export class Chat {
 
   // ==================== PUBLIC ACTIONS ====================
 
+  private readonly TOKEN_KEY = 'loyalty_token';
+  
   async submitPhone(phone: string): Promise<void> {
     this.addUserMessage(phone);
     this.state.set('checking_phone');
 
     await this.addBotMessage('🔍 Проверяю данные в базе...');
 
+    // 1. Пытаемся авторизоваться. 
+    // Если на бэкенде есть одобренная заявка, он сам создаст агента и вернет токен.
     try {
       const loginRes = await firstValueFrom(this.api.login({ phone }));
 
       if (loginRes?.access_token) {
+        localStorage.setItem(this.TOKEN_KEY, loginRes?.access_token)
         if (loginRes.role === 'agent') {
           const agent = await firstValueFrom(this.api.getMyProfile());
           this.auth.setAuth(loginRes.access_token, agent, phone, 'agent');
@@ -119,6 +124,7 @@ export class Chat {
       }
     }
 
+    // 2. Если авторизация не удалась (404), проверяем статус заявки
     try {
       const app = await firstValueFrom(this.api.getApplicationByPhone(phone));
 
@@ -129,7 +135,8 @@ export class Chat {
           await this.addBotMessage(`📋 У вас уже есть заявка на рассмотрении. Статус: **⏳ На рассмотрении**`);
           await this.showPendingStatus();
           return;
-        } else if (app.status === 'rejected') {
+        } 
+        else if (app.status === 'rejected') {
           await this.addBotMessage(`❌ Ваша заявка была отклонена. Причина: ${app.rejection_reason || 'не указана'}`);
           await this.addBotMessage('Хотите подать новую заявку?');
           this.state.set('agent_rejected');
@@ -141,13 +148,15 @@ export class Chat {
             ]
           });
           return;
-        } else if (app.status === 'approved') {
+        } 
+        else if (app.status === 'approved') {
+          // Fallback: если бэкенд не создал агента автоматически при login,
+          // пытаемся залогиниться еще раз, а если не выйдет - используем данные заявки для UI.
           await this.addBotMessage(`✅ Ваша заявка одобрена! Добро пожаловать в систему! 🎉`);
 
           let agentData: Agent | null = null;
           let token: string | null = null;
 
-          // Пытаемся получить токен и профиль с бэкенда
           try {
             const retryLogin = await firstValueFrom(this.api.login({ phone }));
             if (retryLogin?.access_token) {
@@ -158,7 +167,6 @@ export class Chat {
             console.warn('Агент еще не создан в БД бэкендом, используем данные заявки для UI');
           }
 
-          // Если бэкенд не вернул профиль, собираем его из данных заявки, чтобы меню отобразилось
           if (!agentData) {
             agentData = {
               id: app.agent_id || 0,
@@ -179,11 +187,9 @@ export class Chat {
             } as Agent;
           }
 
-          // Сохраняем данные
           if (token) {
             this.auth.setAuth(token, agentData, phone, 'agent');
           } else {
-            // Сохраняем в стейт без токена, чтобы UI отрисовал меню
             this.auth.user.set(agentData);
             this.auth.role.set('agent');
             this.auth.phone.set(phone);
@@ -201,6 +207,7 @@ export class Chat {
       console.log('Application not found, starting registration...');
     }
 
+    // 3. Ничего не найдено - начинаем процесс регистрации
     const urlParams = new URLSearchParams(window.location.search);
     const referralCode = urlParams.get('ref');
 

@@ -12,7 +12,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   };
 
   if (auth.token()) {
-    headers['Authorization'] = `Bearer ${auth.token()}`;
+    headers['Authorization'] = `Bearer ${localStorage.getItem('loyalty_token')}`;
   }
 
   const cloned = req.clone({ setHeaders: headers });

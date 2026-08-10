@@ -29,5 +29,6 @@ export class MessageBubble {
     const classes = ['btn'];
     if (btn.variant) classes.push(`btn-${btn.variant}`);
     return classes.join(' ');
+    
   }
 }

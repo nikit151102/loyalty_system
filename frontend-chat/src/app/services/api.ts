@@ -87,16 +87,16 @@ export class Api {
 
     // ==================== PURCHASES ====================
     createPurchase(data: { client_id: number; amount: number; order_number?: string; comment?: string }): Observable<Purchase> {
-        return this.http.post<Purchase>(`${this.config.API_URL}/purchases`, data, { headers: this.headers() });
+        return this.http.post<Purchase>(`${this.config.API_URL}/purchases`, data);
     }
 
     getClientPurchases(clientId: number): Observable<Purchase[]> {
-        return this.http.get<Purchase[]>(`${this.config.API_URL}/purchases/client/${clientId}`, { headers: this.headers() });
+        return this.http.get<Purchase[]>(`${this.config.API_URL}/purchases/client/${clientId}`);
     }
 
     // ==================== REFERRALS ====================
     getReferralStats(): Observable<any> {
-        return this.http.get<any>(`${this.config.API_URL}/referrals/me`, { headers: this.headers() });
+        return this.http.get<any>(`${this.config.API_URL}/referrals/me`);
     }
 
     // ==================== QR ====================

@@ -51,7 +51,9 @@
             }
             @case ('referral') {
             <app-referral-section [stats]="message.cardData.data" [url]="message.cardData.url" />
+           <pre>{{ message.cardData | json }}</pre>
             }
+            
             @case ('qr') {
             <app-qr-display [client]="message.cardData.data" />
             }
