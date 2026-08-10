@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from auth import create_access_token, get_agent_by_user_id
 from database import get_session
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
