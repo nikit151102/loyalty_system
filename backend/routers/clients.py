@@ -191,3 +191,40 @@ async def get_client_qr_image(
             "Content-Disposition": f"inline; filename=qr_{client.referral_code}.png"
         }
     )
+
+
+@router.get("/me", response_model=ClientResponse)
+async def get_my_profile(
+    payload: dict = Depends(get_current_user), 
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Получить профиль текущего авторизованного клиента.
+    Работает только для клиентов (role=client).
+    """
+    role = payload.get("role")
+    user_id = payload.get("user_id")
+    
+    if role != "client":
+        raise HTTPException(
+            status_code=403, 
+            detail="Этот эндпоинт доступен только клиентам"
+        )
+    
+    if not user_id:
+        raise HTTPException(
+            status_code=401, 
+            detail="Не удалось определить пользователя из токена"
+        )
+    
+    # Ищем клиента по ID
+    client = await ClientService.get_client_by_id(session, user_id)
+    
+    if not client:
+        raise HTTPException(
+            status_code=404, 
+            detail="Клиент не найден"
+        )
+    
+    return ClientResponse.model_validate(client)
+# ===================================================================

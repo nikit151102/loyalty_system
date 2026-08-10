@@ -50,6 +50,9 @@ export class Api {
     getMyProfile(): Observable<any> {
         return this.http.get<any>(`${this.config.API_URL}/agents/me`); // Или /clients/me, если бэкенд роутит по токену
     }
+    getMyClientProfile(): Observable<any> {
+        return this.http.get<any>(`${this.config.API_URL}/clients/me`); // Или /clients/me, если бэкенд роутит по токену
+    }
 
     getMyStatus(): Observable<any> {
         return this.http.get<any>(`${this.config.API_URL}/agents/me/status`, { headers: this.headers() });

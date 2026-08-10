@@ -102,7 +102,7 @@ export class Chat {
           return;
         }
         else if (loginRes.role === 'client') {
-          const client = await firstValueFrom(this.api.getMyProfile());
+          const client = await firstValueFrom(this.api.getMyClientProfile());
           this.auth.setAuth(loginRes.access_token, client, phone, 'client');
           this.currentUser = client;
 
