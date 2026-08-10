@@ -21,13 +21,13 @@ export class Chat {
   currentUser: Agent | Client | null = null;
   currentApplication: Application | null = null;
 
-  // Registration flow state
   registrationStep = signal(1);
   registrationData: any = {
     phone: '',
     email: '',
     registration_type: '',
-    referral_code: null
+    referral_code: null,
+    inn: ''
   };
 
   constructor() {
@@ -38,6 +38,7 @@ export class Chat {
     await this.addBotMessage(`Привет! 👋 Я ${this.config.BOT_NAME} — помощник программы лояльности.`);
     await this.delay(600);
     await this.addBotMessage('Введите ваш номер телефона, чтобы продолжить:');
+    // Поле появится только после того, как бот задаст вопрос
     this.state.set('asking_phone');
   }
 
@@ -80,121 +81,125 @@ export class Chat {
 
   async submitPhone(phone: string): Promise<void> {
     this.addUserMessage(phone);
-    this.state.set('checking_phone');
+    this.state.set('checking_phone'); // Скрываем поле ввода
 
     await this.addBotMessage('🔍 Проверяю данные в базе...');
 
     try {
-        // 1. Сначала проверяем, существует ли клиент
-        const client = await firstValueFrom(this.api.getClientByPhone(phone));
-        
-        if (client) {
-            // Клиент найден
-            this.currentUser = client;
-            await this.delay(500);
-            await this.addBotMessage(`Добро пожаловать! Вы уже являетесь клиентом программы. 🎉`);
-            this.showClientMenu(client);
-            return;
+      // 1. Единый запрос на авторизацию через новый эндпоинт
+      // Бэкенд сам проверит таблицы agents и clients
+      const loginRes = await firstValueFrom(this.api.login({ phone }));
+
+      if (loginRes?.access_token) {
+        // 2. Успешный логин: сохраняем токен!
+        // Интерсептор автоматически подхватит его для следующих запросов
+
+        if (loginRes.role === 'agent') {
+          // Получаем полный профиль агента (запрос пройдет уже с Bearer token)
+          const agent = await firstValueFrom(this.api.getMyProfile());
+          this.auth.setAuth(loginRes.access_token, agent, phone, 'agent');
+          this.currentUser = agent;
+
+          // if (agent.status === 'active') {
+            await this.delay(400);
+            await this.addBotMessage(`Рады видеть вас снова, ${agent.email?.split('@')[0] || 'Агент'}! 👋`);
+            await this.showAgentMenu();
+          // } else if (agent.status === 'blocked') {
+          //   await this.addBotMessage(`⚠️ Ваш аккаунт заблокирован. Обратитесь в поддержку.`);
+          //   this.state.set('agent_rejected');
+          // }
+          return;
         }
+        else if (loginRes.role === 'client') {
+          // Получаем профиль клиента
+          const client = await firstValueFrom(this.api.getMyProfile()); // Или api.getMyClient() в зависимости от реализации бэкенда
+          this.auth.setAuth(loginRes.access_token, client, phone, 'client');
+          this.currentUser = client;
 
-        // 2. Если клиент не найден, пробуем найти агента
-        const maxUserId = this.phoneToId(phone);
-        
-        try {
-            const loginRes = await firstValueFrom(this.api.login(maxUserId));
-            
-            if (loginRes?.access_token) {
-                // Агент найден и авторизован
-                const agent = await firstValueFrom(this.api.getMyProfile());
-                this.auth.setAuth(loginRes.access_token, agent, phone);
-                this.currentUser = agent;
-
-                if (agent.status === 'active') {
-                    await this.delay(400);
-                    await this.addBotMessage(`Рады видеть вас снова, ${agent.email?.split('@')[0] || 'Агент'}! 👋`);
-                    this.showAgentMenu();
-                } else if (agent.status === 'blocked') {
-                    await this.addBotMessage(`⚠️ Ваш аккаунт заблокирован. Обратитесь в поддержку.`);
-                    this.state.set('agent_rejected');
-                }
-                return;
-            }
-        } catch (loginError: any) {
-            // Агент не найден или ошибка авторизации - продолжаем
-            console.log('Agent not found, checking application...');
+          await this.delay(400);
+          await this.addBotMessage(`Добро пожаловать! Вы уже являетесь клиентом программы. 🎉`);
+          await this.showClientMenu(client);
+          return;
         }
-
-        // 3. Проверяем статус заявки
-        try {
-            const app = await firstValueFrom(this.api.getApplicationByPhone(phone));
-            
-            if (app) {
-                this.currentApplication = app;
-                
-                if (app.status === 'pending') {
-                    await this.addBotMessage(`📋 У вас уже есть заявка на рассмотрении. Статус: **⏳ На рассмотрении**`);
-                    this.showPendingStatus();
-                    return;
-                } else if (app.status === 'rejected') {
-                    await this.addBotMessage(`❌ Ваша заявка была отклонена. Причина: ${app.rejection_reason || 'не указана'}`);
-                    await this.addBotMessage('Хотите подать новую заявку?');
-                    this.state.set('agent_rejected');
-                    this.addBotMessage('', {
-                        type: 'buttons',
-                        buttons: [
-                            { id: 'reregister', label: '🔄 Подать заявку снова', action: 'reregister', variant: 'primary' },
-                            { id: 'back', label: '← Назад', action: 'back', variant: 'outline' }
-                        ]
-                    });
-                    return;
-                } else if (app.status === 'approved') {
-                    // Заявка одобрена, но пользователь еще не агент
-                    await this.addBotMessage(`✅ Ваша заявка одобрена! Вы можете войти в систему.`);
-                    // Можно предложить войти или зарегистрироваться как агент
-                    this.showAgentMenu();
-                    return;
-                }
-            }
-        } catch (appError: any) {
-            // Заявка не найдена - продолжаем
-            console.log('Application not found, starting registration...');
-        }
-
-        // 4. Ничего не найдено - начинаем регистрацию
-        const urlParams = new URLSearchParams(window.location.search);
-        const referralCode = urlParams.get('ref');
-
-        if (referralCode) {
-            this.registrationData.referral_code = referralCode;
-            await this.addBotMessage(`🎁 Вы перешли по реферальной ссылке! Давайте оформим вас как клиента программы.`);
-            this.startClientRegistration();
-        } else {
-            await this.addBotMessage(`Вы впервые в нашей программе. Хотите стать агентом?`);
-            this.state.set('agent_registration');
-            this.addBotMessage('', {
-                type: 'buttons',
-                buttons: [
-                    { id: 'start_register', label: '🚀 Стать агентом', action: 'start_register', variant: 'primary' },
-                    { id: 'learn_more', label: '❓ Узнать больше', action: 'learn_more', variant: 'outline' }
-                ]
-            });
-        }
-        
-    } catch (error: any) {
-        console.error('Error in submitPhone:', error);
-        await this.addBotMessage('⚠️ Произошла ошибка при проверке данных. Попробуйте еще раз.');
+      }
+    } catch (loginError: any) {
+      // Если бэкенд вернул 404, значит пользователя нет в базах agents и clients
+      if (loginError.status === 404) {
+        console.log('User not found in DB, checking applications...');
+        // Переходим к проверке заявок ниже (ничего не делаем, просто выходим из catch)
+      } else {
+        // Если это не 404 (например, 500 или проблемы с сетью), показываем ошибку
+        console.error('Login error:', loginError);
+        await this.addBotMessage('⚠️ Произошла ошибка при подключении к серверу. Попробуйте еще раз.');
         this.state.set('asking_phone');
+        return;
+      }
     }
-}
+
+    // 3. Если пользователя нет (был 404), проверяем статус заявки на регистрацию агента
+    try {
+      const app = await firstValueFrom(this.api.getApplicationByPhone(phone));
+
+      if (app) {
+        this.currentApplication = app;
+
+        if (app.status === 'pending') {
+          await this.addBotMessage(`📋 У вас уже есть заявка на рассмотрении. Статус: **⏳ На рассмотрении**`);
+          await this.showPendingStatus();
+          return;
+        } else if (app.status === 'rejected') {
+          await this.addBotMessage(`❌ Ваша заявка была отклонена. Причина: ${app.rejection_reason || 'не указана'}`);
+          await this.addBotMessage('Хотите подать новую заявку?');
+          this.state.set('agent_rejected');
+          await this.addBotMessage('', {
+            type: 'buttons',
+            buttons: [
+              { id: 'reregister', label: '🔄 Подать заявку снова', action: 'reregister', variant: 'primary' },
+              { id: 'back', label: '← Назад', action: 'back', variant: 'outline' }
+            ]
+          });
+          return;
+        } else if (app.status === 'approved') {
+          await this.addBotMessage(`✅ Ваша заявка одобрена! Но профиль еще не создан. Обратитесь к администратору.`);
+          this.state.set('welcome');
+          return;
+        }
+      }
+    } catch (appError: any) {
+      console.log('Application not found, starting registration...');
+    }
+
+    // 4. Ничего не найдено - начинаем регистрацию
+    const urlParams = new URLSearchParams(window.location.search);
+    const referralCode = urlParams.get('ref');
+
+    if (referralCode) {
+      this.registrationData.referral_code = referralCode;
+      await this.addBotMessage(`🎁 Вы перешли по реферальной ссылке! Давайте оформим вас как клиента программы.`);
+      await this.startClientRegistration();
+    } else {
+      await this.addBotMessage(`Вы впервые в нашей программе. Хотите стать агентом?`);
+      this.state.set('welcome');
+      await this.addBotMessage('', {
+        type: 'buttons',
+        buttons: [
+          { id: 'start_register', label: '🚀 Стать агентом', action: 'start_register', variant: 'primary' },
+          { id: 'learn_more', label: '❓ Узнать больше', action: 'learn_more', variant: 'outline' }
+        ]
+      });
+    }
+  }
+
+
 
   async handleButtonAction(action: string, data?: any): Promise<void> {
     switch (action) {
       case 'start_register':
-        this.startAgentRegistration();
+        await this.startAgentRegistration();
         break;
       case 'reregister':
         this.auth.logout();
-        this.startAgentRegistration();
+        await this.startAgentRegistration();
         break;
       case 'back':
         this.goToWelcome();
@@ -206,10 +211,10 @@ export class Chat {
         await this.showAgentClients();
         break;
       case 'add_client':
-        this.startAddClient();
+        await this.startAddClient();
         break;
       case 'add_purchase':
-        this.startAddPurchase(data);
+        await this.startAddPurchase(data);
         break;
       case 'show_referral':
         await this.showReferral();
@@ -218,7 +223,7 @@ export class Chat {
         await this.checkApplicationStatus();
         break;
       case 'show_qr':
-        this.showQR(data);
+        await this.showQR(data);
         break;
       case 'logout':
         this.auth.logout();
@@ -234,7 +239,7 @@ export class Chat {
         break;
       case 'edit_register':
         this.registrationStep.set(1);
-        this.startAgentRegistration();
+        await this.startAgentRegistration();
         break;
       case 'cancel_register':
         this.goToWelcome();
@@ -247,22 +252,26 @@ export class Chat {
   private async startAgentRegistration(): Promise<void> {
     this.registrationStep.set(1);
     this.registrationData = { phone: '', email: '', registration_type: '', referral_code: null };
-    this.state.set('agent_registration');
+    this.state.set('checking_phone'); // Скрываем предыдущие поля
     await this.addBotMessage('Отлично! Давайте заполним анкету. Шаг 1 из 4.\n\n📱 **Ваш номер телефона:**');
+    this.state.set('agent_registration'); // Поле появится ПОСЛЕ вопроса
   }
 
   async submitRegStep(step: number, value: string): Promise<void> {
     this.addUserMessage(value);
+    this.state.set('checking_phone'); // Скрываем поле, пока бот "думает"
 
     if (step === 1) {
       this.registrationData.phone = value;
-      this.registrationStep.set(2);
       await this.addBotMessage('✅ Отлично!\n\n📧 **Шаг 2: Укажите ваш email:**');
+      this.registrationStep.set(2);
+      this.state.set('agent_registration'); // Показываем поле email
     } else if (step === 2) {
       this.registrationData.email = value;
-      this.registrationStep.set(3);
       await this.addBotMessage('✅ Email принят!\n\n🏢 **Шаг 3: Выберите ваш статус:**');
-      this.addBotMessage('', {
+      this.registrationStep.set(3);
+      this.state.set('agent_registration');
+      await this.addBotMessage('', {
         type: 'buttons',
         buttons: [
           { id: 't1', label: '👨‍💼 Самозанятый', action: 'select_type', variant: 'outline', data: 'self_employed' },
@@ -280,7 +289,7 @@ export class Chat {
       'legal_entity': '🏛 Юридическое лицо'
     };
     await this.addBotMessage(`📋 **Шаг 4: Проверьте данные**\n\n📱 Телефон: ${this.registrationData.phone}\n📧 Email: ${this.registrationData.email}\n🏢 Статус: ${typeLabels[this.registrationData.registration_type]}\n\nВсё верно?`);
-    this.addBotMessage('', {
+    await this.addBotMessage('', {
       type: 'buttons',
       buttons: [
         { id: 'c1', label: '✅ Отправить заявку', action: 'confirm_register', variant: 'success' },
@@ -304,7 +313,7 @@ export class Chat {
       this.currentApplication = app;
       await this.addBotMessage(`✅ **Заявка успешно отправлена!** 🎉\n\nНомер заявки: #${app.id}\nМы рассмотрим её в ближайшее время.\n\nВы можете проверять статус в любой момент.`);
       this.state.set('agent_pending');
-      this.showPendingStatus();
+      await this.showPendingStatus();
     } catch (e: any) {
       this.toast.error(e.error?.detail || 'Ошибка при подаче заявки');
       await this.addBotMessage(`❌ Произошла ошибка: ${e.error?.detail || 'попробуйте ещё раз'}`);
@@ -314,31 +323,39 @@ export class Chat {
   // ==================== CLIENT REGISTRATION FLOW ====================
 
   private async startClientRegistration(): Promise<void> {
-    this.state.set('client_registration');
+    this.registrationStep.set(1);
+    this.state.set('checking_phone');
     await this.addBotMessage('📝 Давайте зарегистрируем вас как клиента.\n\n🔢 Введите **ИНН** (10 или 12 цифр):');
+    this.state.set('client_registration');
   }
 
   async submitClientStep(step: number, value: string): Promise<void> {
     this.addUserMessage(value);
+    this.state.set('checking_phone');
+
     if (step === 1) {
       this.registrationData.inn = value;
       await this.addBotMessage('✅ ИНН принят!\n\n📱 Введите ваш номер телефона:');
+      this.registrationStep.set(2);
+      this.state.set('client_registration');
     } else if (step === 2) {
       this.registrationData.phone = value;
       await this.addBotMessage('📧 Введите ваш email:');
+      this.registrationStep.set(3);
+      this.state.set('client_registration');
     } else if (step === 3) {
       this.registrationData.email = value;
       await this.addBotMessage(`✅ Данные получены! Создаю ваш профиль клиента...`);
-      // Here would be client creation via referral
       this.toast.success('Клиент зарегистрирован! (демо)');
+      this.state.set('client_menu');
     }
   }
 
   // ==================== MENUS ====================
 
-  private showAgentMenu(): void {
+  private async showAgentMenu(): Promise<void> {
     this.state.set('agent_menu');
-    this.addBotMessage('', {
+    await this.addBotMessage('', {
       type: 'menu',
       text: '🏠 **Главное меню агента**\n\nВыберите действие:',
       menuData: {
@@ -354,9 +371,9 @@ export class Chat {
     });
   }
 
-  private showClientMenu(client: Client): void {
+  private async showClientMenu(client: Client): Promise<void> {
     this.state.set('client_menu');
-    this.addBotMessage('', {
+    await this.addBotMessage('', {
       type: 'menu',
       text: `🏠 **Меню клиента**\n\n👤 ${client.full_name}\n📱 ${client.phone}`,
       menuData: {
@@ -370,9 +387,9 @@ export class Chat {
     });
   }
 
-  private showPendingStatus(): void {
+  private async showPendingStatus(): Promise<void> {
     this.state.set('agent_pending');
-    this.addBotMessage('', {
+    await this.addBotMessage('', {
       type: 'buttons',
       buttons: [
         { id: 's1', label: '🔄 Обновить статус', action: 'check_status', variant: 'primary' },
@@ -386,14 +403,14 @@ export class Chat {
     await this.addBotMessage('📊 Загружаю вашу статистику...');
     try {
       const stats = await firstValueFrom(this.api.getMyStats());
-      this.addBotMessage('', {
+      await this.addBotMessage('', {
         type: 'card',
         cardData: { type: 'stats', data: stats }
       });
-      this.addBackButton();
+      await this.addBackButton();
     } catch (e) {
       this.toast.error('Не удалось загрузить статистику');
-      this.addBackButton();
+      await this.addBackButton();
     }
   }
 
@@ -405,12 +422,12 @@ export class Chat {
       if (clients.length === 0) {
         await this.addBotMessage('У вас пока нет клиентов. Добавьте первого!');
       } else {
-        this.addBotMessage('', {
+        await this.addBotMessage('', {
           type: 'card',
           cardData: { type: 'clients_list', data: clients }
         });
       }
-      this.addBotMessage('', {
+      await this.addBotMessage('', {
         type: 'buttons',
         buttons: [
           { id: 'a1', label: '➕ Добавить клиента', action: 'add_client', variant: 'primary' },
@@ -419,7 +436,7 @@ export class Chat {
       });
     } catch (e) {
       this.toast.error('Ошибка загрузки клиентов');
-      this.addBackButton();
+      await this.addBackButton();
     }
   }
 
@@ -430,24 +447,24 @@ export class Chat {
       const stats = await firstValueFrom(this.api.getReferralStats());
       const agent = this.auth.agent();
       const url = `${window.location.origin}?ref=${agent?.referral_code}`;
-      this.addBotMessage('', {
+      await this.addBotMessage('', {
         type: 'card',
         cardData: { type: 'referral', data: stats, url }
       });
-      this.addBackButton();
+      await this.addBackButton();
     } catch (e) {
       this.toast.error('Ошибка');
-      this.addBackButton();
+      await this.addBackButton();
     }
   }
 
-  private showQR(client: Client): void {
+  private async showQR(client: Client): Promise<void> {
     this.state.set('qr_display');
-    this.addBotMessage('', {
+    await this.addBotMessage('', {
       type: 'card',
       cardData: { type: 'qr', data: client }
     });
-    this.addBackButton();
+    await this.addBackButton();
   }
 
   private async checkApplicationStatus(): Promise<void> {
@@ -462,27 +479,27 @@ export class Chat {
     } else if (this.currentApplication) {
       await this.addBotMessage(`📋 Статус заявки #${this.currentApplication.id}: **${this.currentApplication.status}**`);
     }
-    this.addBackButton();
+    await this.addBackButton();
   }
 
-  private startAddClient(): void {
+  private async startAddClient(): Promise<void> {
     this.state.set('add_client');
-    this.addBotMessage('', {
+    await this.addBotMessage('', {
       type: 'card',
       cardData: { type: 'add_client_form' }
     });
   }
 
-  private startAddPurchase(client: Client): void {
+  private async startAddPurchase(client: Client): Promise<void> {
     this.state.set('add_purchase');
-    this.addBotMessage('', {
+    await this.addBotMessage('', {
       type: 'card',
       cardData: { type: 'add_purchase_form', data: client }
     });
   }
 
-  private addBackButton(): void {
-    this.addBotMessage('', {
+  private async addBackButton(): Promise<void> {
+    await this.addBotMessage('', {
       type: 'buttons',
       buttons: [
         { id: 'back', label: '← Назад в меню', action: 'back_to_menu', variant: 'outline' }
@@ -492,7 +509,7 @@ export class Chat {
 
   async handleBackToMenu(): Promise<void> {
     if (this.auth.agent()) {
-      this.showAgentMenu();
+      await this.showAgentMenu();
     } else {
       this.goToWelcome();
     }
@@ -506,7 +523,6 @@ export class Chat {
   }
 
   private phoneToId(phone: string): number {
-    // Simple deterministic hash for demo purposes
     let hash = 0;
     for (let i = 0; i < phone.length; i++) {
       hash = ((hash << 5) - hash) + phone.charCodeAt(i);

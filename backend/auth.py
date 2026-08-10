@@ -1,4 +1,3 @@
-"""Аутентификация"""
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import Depends, HTTPException, status, Security
@@ -7,12 +6,10 @@ from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from config import settings
-from models.db_models import Agent
-
+from models.db_models import Agent, Client
 
 security = HTTPBearer()
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
@@ -20,13 +17,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.API_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
-
 def decode_token(token: str) -> dict:
     try:
         return jwt.decode(token, settings.API_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Недействительный токен")
-
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     payload = decode_token(credentials.credentials)
@@ -34,19 +29,51 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Недействительный токен")
     return payload
 
+# === НОВЫЕ ЗАВИСИМОСТИ ДЛЯ ЗАЩИТЫ РОУТОВ ===
+async def get_current_agent(
+    payload: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+) -> Agent:
+    """Проверяет, что авторизованный пользователь является агентом, и возвращает объект Agent"""
+    if payload.get("role") != "agent":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ разрешен только агентам")
+    
+    result = await session.execute(select(Agent).where(Agent.id == payload.get("user_id")))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Агент не найден")
+    return agent
+
+async def get_current_client(
+    payload: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+) -> Client:
+    """Проверяет, что авторизованный пользователь является клиентом, и возвращает объект Client"""
+    if payload.get("role") != "client":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ разрешен только клиентам")
+        
+    result = await session.execute(select(Client).where(Client.id == payload.get("user_id")))
+    client = result.scalar_one_or_none()
+    if not client:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Клиент не найден")
+    return client
 
 async def verify_api_key(api_key: Optional[str] = Security(api_key_header)) -> bool:
     if api_key != settings.API_KEY:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недействительный API ключ")
     return True
 
-
 async def require_admin(payload: dict = Depends(get_current_user)) -> dict:
-    if int(payload.get("sub", 0)) not in settings.admin_ids:
+    # Проверка прав администратора по ID пользователя
+    if int(payload.get("user_id", 0)) not in settings.admin_ids:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Требуются права администратора")
     return payload
 
+# === ФУНКЦИИ ПОИСКА ПО ТЕЛЕФОНУ ===
+async def get_agent_by_phone(phone: str, session: AsyncSession) -> Optional[Agent]:
+    result = await session.execute(select(Agent).where(Agent.phone == phone))
+    return result.scalar_one_or_none()
 
-async def get_agent_by_user_id(user_id: int, session: AsyncSession):
-    result = await session.execute(select(Agent).where(Agent.max_user_id == user_id))
+async def get_client_by_phone(phone: str, session: AsyncSession) -> Optional[Client]:
+    result = await session.execute(select(Client).where(Client.phone == phone))
     return result.scalar_one_or_none()

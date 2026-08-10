@@ -24,11 +24,8 @@ export class Api {
     }
 
     // ==================== AUTH ====================
-    login(maxUserId: number): Observable<any> {
-        return this.http.post(`${this.config.API_URL}/auth/login`, null, {
-            params: { max_user_id: maxUserId.toString() },
-            headers: this.headers()
-        });
+    login(payload: { phone: string }): Observable<any> {
+        return this.http.post<any>(`${this.config.API_URL}/auth/login`, payload);
     }
 
     // ==================== APPLICATIONS ====================
@@ -45,15 +42,13 @@ export class Api {
         }).pipe(catchError(() => of(null)));
     }
 
-    getApplicationByPhone(phoneNumber: string): Observable<Application | null> {
-        return this.http.get<Application>(`${this.config.API_URL}/applications/by-phone/${phoneNumber}`, {
-            headers: this.headers()
-        }).pipe(catchError(() => of(null)));
+    getApplicationByPhone(phone: string): Observable<any> {
+        return this.http.get<any>(`${this.config.API_URL}/applications/by-phone/${phone}`);
     }
 
     // ==================== AGENTS ====================
-    getMyProfile(): Observable<Agent> {
-        return this.http.get<Agent>(`${this.config.API_URL}/agents/me`, { headers: this.headers() });
+    getMyProfile(): Observable<any> {
+        return this.http.get<any>(`${this.config.API_URL}/agents/me`); // Или /clients/me, если бэкенд роутит по токену
     }
 
     getMyStatus(): Observable<any> {
