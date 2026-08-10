@@ -83,66 +83,42 @@ class ApplicationService:
         
 
     @staticmethod
-    async def approve_application(session: AsyncSession, application_id: int, reviewed_by: int):
-        import asyncio
-        from services.notification_service import NotificationService
+    async def approve_application(
+        session: AsyncSession, 
+        application_id: int, 
+        reviewed_by: int
+    ) -> Agent:
+        """Одобрить заявку и создать агента"""
+        from datetime import datetime
+        from models.db_models import ApplicationStatus, Application
         
-        result = await session.execute(select(Application).where(Application.id == application_id))
-        application = result.scalar_one_or_none()
-        if not application: raise ValueError("Заявка не найдена")
+        # Получаем заявку
+        app = await session.get(Application, application_id)
+        if not app:
+            raise ValueError("Заявка не найдена")
         
-        # Извлекаем реферальный код из rejection_reason
-        referral_code_for_agent = None
-        invited_by_agent_id = None
+        if app.status != ApplicationStatus.PENDING:
+            raise ValueError(f"Заявка уже обработана. Статус: {app.status}")
         
-        if application.rejection_reason and application.rejection_reason.startswith("REF:"):
-            referral_code_for_agent = application.rejection_reason[4:]  # Убираем префикс "REF:"
-        
-        # Создаём агента с переданным реферальным кодом
+        # Создаем или получаем агента (теперь с проверкой на дубликаты)
         agent = await AgentService.create_agent(
-            session=session, 
-            max_user_id=application.max_user_id, 
-            phone=application.phone,
-            email=application.email, 
-            city=application.city,
-            registration_type=application.registration_type,
-            invited_by_agent_id=invited_by_agent_id,
-            referral_code=referral_code_for_agent  # ПЕРЕДАЁМ СГЕНЕРИРОВАННЫЙ КОД
+            session=session,
+            max_user_id=app.max_user_id,
+            phone=app.phone,
+            email=app.email,
+            city=app.city,
+            registration_type=app.registration_type.value,
+            referral_code=app.referral_code if hasattr(app, 'referral_code') else None
         )
         
-        application.status = ApplicationStatus.APPROVED
-        application.agent_id = agent.id
-        application.reviewed_by = reviewed_by
-        application.reviewed_at = datetime.utcnow()
-        application.rejection_reason = None  # Очищаем после использования
-        agent.approved_at = datetime.utcnow()
-        
-        # Реферальная связь 1 уровня
-        if invited_by_agent_id:
-            await ReferralService.create_referral(session, invited_by_agent_id, agent.id, 1)
-            inviter = (await session.execute(select(Agent).where(Agent.id == invited_by_agent_id))).scalar_one_or_none()
-            # Реферальная связь 2 уровня
-            if inviter and inviter.invited_by_agent_id:
-                await ReferralService.create_referral(session, inviter.invited_by_agent_id, agent.id, 2)
-        
-        user_id_to_notify = application.max_user_id
-        agent_id_for_notify = agent.id
+        # Обновляем заявку
+        app.status = ApplicationStatus.APPROVED
+        app.agent_id = agent.id
+        app.reviewed_by = reviewed_by
+        app.reviewed_at = datetime.utcnow()
         
         await session.flush()
-        
-        try:
-            asyncio.create_task(
-                NotificationService.notify_application_approved(
-                    user_id=user_id_to_notify,
-                    agent_id=agent_id_for_notify
-                )
-            )
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Ошибка уведомления: {e}")
-        
         return agent
-
 
     @staticmethod
     async def reject_application(session: AsyncSession, application_id: int, reviewed_by: int, rejection_reason: str = None):

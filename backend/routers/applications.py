@@ -23,11 +23,25 @@ async def register_agent(data: AgentRegisterRequest, session: AsyncSession = Dep
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/register/{referral_code}", response_model=ApplicationResponse)
-async def register_with_referral(referral_code: str, data: AgentRegisterRequest, session: AsyncSession = Depends(get_session)):
+async def register_with_referral(
+    referral_code: str, 
+    data: AgentRegisterRequest, 
+    session: AsyncSession = Depends(get_session)
+):
     try:
         existing = await get_agent_by_user_id(data.max_user_id, session)
-        if existing: raise HTTPException(status_code=400, detail="Вы уже являетесь агентом")
-        app = await ApplicationService.create_application(session, data.max_user_id, data.phone, data.email, RegistrationType(data.registration_type), referral_code)
+        if existing: 
+            raise HTTPException(status_code=400, detail="Вы уже являетесь агентом")
+        
+        app = await ApplicationService.create_application(
+            session, 
+            data.max_user_id, 
+            data.phone, 
+            data.email, 
+            data.city,  
+            RegistrationType(data.registration_type), 
+            referral_code
+        )
         return ApplicationResponse.model_validate(app)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
