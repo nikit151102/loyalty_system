@@ -3,10 +3,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from sqlalchemy import select
-from auth import get_current_user, verify_api_key, get_agent_by_user_id
+from auth import get_current_user, verify_api_key, get_agent_by_user_id, create_access_token
 from database import get_session
-from models.schemas import ClientCreateRequest, ClientResponse, ClientUpdateRequest, MessageResponse
+from models.schemas import (
+    ClientCreateRequest, ClientResponse, ClientUpdateRequest, 
+    MessageResponse, ClientRegisterByReferralRequest
+)
 from services.client_service import ClientService
+from services.agent_service import AgentService
 from models.db_models import ClientType, Client
 from fastapi.responses import Response
 import base64
@@ -41,6 +45,73 @@ async def create_client_external(data: ClientCreateRequest, session: AsyncSessio
         return ClientResponse.model_validate(client)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ============ НОВЫЙ ЭНДПОИНТ: Регистрация клиента по реферальному коду ============
+@router.post("/register")
+async def register_client_by_referral(
+    data: ClientRegisterByReferralRequest, 
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Регистрация клиента по реферальной ссылке.
+    Автоматически находит агента по referral_code и создает клиента.
+    Возвращает данные клиента + JWT токен для автоматического входа.
+    """
+    try:
+        # 1. Ищем агента по реферальному коду
+        agent = await AgentService.get_agent_by_referral_code(session, data.referral_code)
+        if not agent:
+            raise HTTPException(
+                status_code=404, 
+                detail="Агент с таким реферальным кодом не найден"
+            )
+        
+        if agent.status.value != 'active':
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Агент не активен (статус: {agent.status.value})"
+            )
+        
+        # 2. Создаем клиента с привязкой к агенту
+        client = await ClientService.create_client(
+            session=session,
+            agent_id=agent.id,
+            full_name=data.full_name,
+            phone=data.phone,
+            email=data.email,
+            inn=data.inn,
+            client_type=ClientType(data.client_type),
+            invited_by_client_id=None,
+            invited_by_agent_id=agent.id,  # Привязываем к пригласившему агенту
+            max_user_id=None,
+            referral_code=data.referral_code  # Передаем для генерации QR
+        )
+        
+        # 3. Обновляем статистику агента
+        agent.total_clients += 1
+        await session.flush()
+        
+        # 4. Генерируем JWT токен для автоматического входа клиента
+        token_data = {
+            "sub": str(client.id),
+            "user_id": client.id,
+            "role": "client"
+        }
+        access_token = create_access_token(data=token_data)
+        
+        # 5. Возвращаем клиента + токен
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "role": "client",
+            "user_id": client.id,
+            "client": ClientResponse.model_validate(client).model_dump()
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+# ===================================================================================
 
 
 @router.get("/", response_model=List[ClientResponse])

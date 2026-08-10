@@ -153,3 +153,24 @@ class PurchaseResponse(BaseModel):
     created_at: datetime
     class Config:
         from_attributes = True
+
+from pydantic import BaseModel, EmailStr, Field
+from typing import Optional
+from datetime import datetime
+
+class ClientRegisterByReferralRequest(BaseModel):
+    """Схема для регистрации клиента по реферальной ссылке"""
+    full_name: str = Field(..., min_length=2, max_length=255)
+    phone: str = Field(..., min_length=10, max_length=20)
+    email: Optional[str] = None
+    inn: Optional[str] = None
+    client_type: str = "individual"
+    referral_code: str = Field(..., description="Реферальный код агента (например, V9132513442)")
+
+
+class ClientRegisterResponse(BaseModel):
+    """Ответ с клиентом и токеном для автоматического входа"""
+    client: 'ClientResponse'
+    access_token: str
+    token_type: str = "bearer"
+    role: str = "client"

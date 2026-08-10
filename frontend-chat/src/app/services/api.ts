@@ -67,6 +67,7 @@ export class Api {
         return this.http.get<AgentStats>(`${this.config.API_URL}/statistics/me`, { headers: this.headers() });
     }
 
+
     // ==================== CLIENTS ====================
     getClients(skip = 0, limit = 20): Observable<Client[]> {
         return this.http.get<Client[]>(`${this.config.API_URL}/clients`, {
@@ -103,4 +104,17 @@ export class Api {
     getQRCodeUrl(clientId: number): string {
         return `${this.config.API_URL}/clients/${clientId}/qr?access_token=${this.auth.token()}`;
     }
+
+    registerClient(data: {
+        full_name: string;
+        phone: string;
+        email?: string;
+        inn?: string;
+        referral_code: string;
+        client_type?: string;
+    }): Observable<any> {
+        return this.http.post<any>(`${this.config.API_URL}/clients/register`, data);
+    }
+
+
 }

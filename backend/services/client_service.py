@@ -10,45 +10,66 @@ from config import settings
 
 class ClientService:
     
+    
     @staticmethod
     async def create_client(
-        session: AsyncSession, agent_id: int, full_name: str, phone: str,
-        email: Optional[str] = None, inn: Optional[str] = None,
+        session: AsyncSession,
+        agent_id: int,
+        full_name: str,
+        phone: str,
+        email: Optional[str] = None,
+        inn: Optional[str] = None,
         client_type: ClientType = ClientType.INDIVIDUAL,
         invited_by_client_id: Optional[int] = None,
         invited_by_agent_id: Optional[int] = None,
-        max_user_id: Optional[int] = None  # ✅ НОВОЕ
+        max_user_id: Optional[int] = None,
+        referral_code: Optional[str] = None  # НОВЫЙ ПАРАМЕТР
     ) -> Client:
-        existing = (await session.execute(select(Client).where(Client.phone == phone))).scalar_one_or_none()
+        # Проверка на дубликат
+        existing = (await session.execute(
+            select(Client).where(Client.phone == phone)
+        )).scalar_one_or_none()
         if existing:
             raise ValueError("Клиент с таким телефоном уже существует")
         
-        referral_code = "CL-" + shortuuid.uuid()[:8].upper()
-        referral_link = f"{settings.BASE_REFERRAL_URL}?ref={referral_code}"
-        
-        qr = qrcode.QRCode(version=1, box_size=10, border=4)
-        qr.add_data(referral_link)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG")
-        buffer.seek(0)
-        qr_base64 = base64.b64encode(buffer.read()).decode("utf-8")
+        # Генерируем QR-код (упрощённо)
+        qr_base64 = await ClientService.generate_qr_code(phone)
         
         client = Client(
-            agent_id=agent_id, full_name=full_name, phone=phone, email=email, inn=inn,
-            client_type=client_type, qr_code_base64=qr_base64, referral_code=referral_code,
-            invited_by_client_id=invited_by_client_id, invited_by_agent_id=invited_by_agent_id,
-            max_user_id=max_user_id  # ✅ ПЕРЕДАЁМ MAX_USER_ID
+            agent_id=agent_id,
+            full_name=full_name,
+            phone=phone,
+            email=email,
+            inn=inn,
+            client_type=client_type,
+            qr_code_base64=qr_base64,
+            referral_code=referral_code,  # СОХРАНЯЕМ REFERRAL CODE
+            invited_by_client_id=invited_by_client_id,
+            invited_by_agent_id=invited_by_agent_id,
+            max_user_id=max_user_id,
+            total_purchases_amount=0.0,
+            purchases_count=0
         )
+        
         session.add(client)
         await session.flush()
-        
-        agent = (await session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
-        if agent:
-            agent.total_clients = (agent.total_clients or 0) + 1
         return client
+    
+    @staticmethod
+    async def generate_qr_code(data: str) -> str:
+        """Генерация QR-кода в base64"""
+        import qrcode
+        import io
+        
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(data)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        
+        return base64.b64encode(buffer.getvalue()).decode('utf-8')
 
     @staticmethod
     async def get_client_by_id(session: AsyncSession, client_id: int) -> Optional[Client]:

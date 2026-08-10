@@ -79,7 +79,7 @@ export class Chat {
   // ==================== PUBLIC ACTIONS ====================
 
   private readonly TOKEN_KEY = 'loyalty_token';
-  
+
   async submitPhone(phone: string): Promise<void> {
     this.addUserMessage(phone);
     this.state.set('checking_phone');
@@ -133,7 +133,7 @@ export class Chat {
           await this.addBotMessage(`📋 У вас уже есть заявка на рассмотрении. Статус: **⏳ На рассмотрении**`);
           await this.showPendingStatus();
           return;
-        } 
+        }
         else if (app.status === 'rejected') {
           await this.addBotMessage(`❌ Ваша заявка была отклонена. Причина: ${app.rejection_reason || 'не указана'}`);
           await this.addBotMessage('Хотите подать новую заявку?');
@@ -146,7 +146,7 @@ export class Chat {
             ]
           });
           return;
-        } 
+        }
         else if (app.status === 'approved') {
           await this.addBotMessage(`✅ Ваша заявка одобрена! Добро пожаловать в систему! 🎉`);
 
@@ -203,8 +203,9 @@ export class Chat {
       console.log('Application not found, starting registration...');
     }
 
+    // ИСПРАВЛЕНО: Поддержка и ?ref= и ?start=
     const urlParams = new URLSearchParams(window.location.search);
-    const referralCode = urlParams.get('ref');
+    const referralCode = urlParams.get('ref') || urlParams.get('start');
 
     if (referralCode) {
       this.registrationData.referral_code = referralCode;
@@ -383,8 +384,30 @@ export class Chat {
     } else if (step === 3) {
       this.registrationData.email = value;
       await this.addBotMessage(`✅ Данные получены! Создаю ваш профиль клиента...`);
-      this.toast.success('Клиент зарегистрирован! (демо)');
-      this.state.set('client_menu');
+
+      try {
+        const client = await firstValueFrom(this.api.registerClient({
+          full_name: `Клиент ${this.registrationData.phone}`, // ← ДОБАВЛЕНО: Временное имя
+          inn: this.registrationData.inn,
+          phone: this.registrationData.phone,
+          email: this.registrationData.email,
+          referral_code: this.registrationData.referral_code,
+          client_type: 'individual' // ← ДОБАВЛЕНО: Тип клиента
+        }));
+
+        this.toast.success('Клиент успешно зарегистрирован! 🎉');
+        this.currentUser = client.client || client; // бэкенд может вернуть { client, access_token }
+
+        if (client.access_token) {
+          this.auth.setAuth(client.access_token, client.client || client, this.registrationData.phone, 'client');
+        }
+
+        await this.showClientMenu(client.client || client);
+      } catch (e: any) {
+        this.toast.error(e.error?.detail || 'Ошибка при регистрации клиента');
+        await this.addBotMessage(`❌ Произошла ошибка: ${e.error?.detail || 'попробуйте ещё раз'}`);
+        this.state.set('client_registration');
+      }
     }
   }
 
