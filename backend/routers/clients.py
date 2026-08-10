@@ -121,6 +121,44 @@ async def list_my_clients(skip: int = Query(0, ge=0), limit: int = Query(20, ge=
     clients, _ = await ClientService.get_clients_by_agent(session, agent.id, skip, limit)
     return [ClientResponse.model_validate(c) for c in clients]
 
+
+
+@router.get("/me", response_model=ClientResponse)
+async def get_my_profile(
+    payload: dict = Depends(get_current_user), 
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Получить профиль текущего авторизованного клиента.
+    Работает только для клиентов (role=client).
+    """
+    role = payload.get("role")
+    user_id = payload.get("user_id")
+    
+    if role != "client":
+        raise HTTPException(
+            status_code=403, 
+            detail="Этот эндпоинт доступен только клиентам"
+        )
+    
+    if not user_id:
+        raise HTTPException(
+            status_code=401, 
+            detail="Не удалось определить пользователя из токена"
+        )
+    
+    # Ищем клиента по ID
+    client = await ClientService.get_client_by_id(session, user_id)
+    
+    if not client:
+        raise HTTPException(
+            status_code=404, 
+            detail="Клиент не найден"
+        )
+    
+    return ClientResponse.model_validate(client)
+# ===================================================================
+
 @router.get("/{client_id}", response_model=ClientResponse)
 async def get_client(client_id: int, payload: dict = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
     agent = await get_agent_by_user_id(int(payload.get("sub")), session)
@@ -192,39 +230,3 @@ async def get_client_qr_image(
         }
     )
 
-
-@router.get("/me", response_model=ClientResponse)
-async def get_my_profile(
-    payload: dict = Depends(get_current_user), 
-    session: AsyncSession = Depends(get_session)
-):
-    """
-    Получить профиль текущего авторизованного клиента.
-    Работает только для клиентов (role=client).
-    """
-    role = payload.get("role")
-    user_id = payload.get("user_id")
-    
-    if role != "client":
-        raise HTTPException(
-            status_code=403, 
-            detail="Этот эндпоинт доступен только клиентам"
-        )
-    
-    if not user_id:
-        raise HTTPException(
-            status_code=401, 
-            detail="Не удалось определить пользователя из токена"
-        )
-    
-    # Ищем клиента по ID
-    client = await ClientService.get_client_by_id(session, user_id)
-    
-    if not client:
-        raise HTTPException(
-            status_code=404, 
-            detail="Клиент не найден"
-        )
-    
-    return ClientResponse.model_validate(client)
-# ===================================================================
