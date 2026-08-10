@@ -35,7 +35,7 @@
         <app-email-input (emailSubmit)="onRegStepSubmit(2, $event)" [@messageEnter] placeholder="Введите email" />
         }
 
-        <!-- Регистрация клиента (теперь с проверкой шагов!) -->
+        <!-- Регистрация клиента -->
         @if (chat.state() === 'client_registration' && chat.registrationStep() === 1) {
         <app-phone-input (phoneSubmit)="onClientStepSubmit(1, $event)" [@messageEnter] placeholder="Введите ИНН" />
         }

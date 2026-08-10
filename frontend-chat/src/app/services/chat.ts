@@ -38,7 +38,6 @@ export class Chat {
     await this.addBotMessage(`Привет! 👋 Я ${this.config.BOT_NAME} — помощник программы лояльности.`);
     await this.delay(600);
     await this.addBotMessage('Введите ваш номер телефона, чтобы продолжить:');
-    // Поле появится только после того, как бот задаст вопрос
     this.state.set('asking_phone');
   }
 
@@ -78,41 +77,28 @@ export class Chat {
 
   // ==================== PUBLIC ACTIONS ====================
 
-
   async submitPhone(phone: string): Promise<void> {
     this.addUserMessage(phone);
-    this.state.set('checking_phone'); // Скрываем поле ввода
+    this.state.set('checking_phone');
 
     await this.addBotMessage('🔍 Проверяю данные в базе...');
 
     try {
-      // 1. Единый запрос на авторизацию через новый эндпоинт
-      // Бэкенд сам проверит таблицы agents и clients
       const loginRes = await firstValueFrom(this.api.login({ phone }));
 
       if (loginRes?.access_token) {
-        // 2. Успешный логин: сохраняем токен!
-        // Интерсептор автоматически подхватит его для следующих запросов
-
         if (loginRes.role === 'agent') {
-          // Получаем полный профиль агента (запрос пройдет уже с Bearer token)
           const agent = await firstValueFrom(this.api.getMyProfile());
           this.auth.setAuth(loginRes.access_token, agent, phone, 'agent');
           this.currentUser = agent;
 
-          // if (agent.status === 'active') {
-            await this.delay(400);
-            await this.addBotMessage(`Рады видеть вас снова, ${agent.email?.split('@')[0] || 'Агент'}! 👋`);
-            await this.showAgentMenu();
-          // } else if (agent.status === 'blocked') {
-          //   await this.addBotMessage(`⚠️ Ваш аккаунт заблокирован. Обратитесь в поддержку.`);
-          //   this.state.set('agent_rejected');
-          // }
+          await this.delay(400);
+          await this.addBotMessage(`Рады видеть вас снова, ${agent.email?.split('@')[0] || 'Агент'}! 👋`);
+          await this.showAgentMenu();
           return;
         }
         else if (loginRes.role === 'client') {
-          // Получаем профиль клиента
-          const client = await firstValueFrom(this.api.getMyProfile()); // Или api.getMyClient() в зависимости от реализации бэкенда
+          const client = await firstValueFrom(this.api.getMyProfile());
           this.auth.setAuth(loginRes.access_token, client, phone, 'client');
           this.currentUser = client;
 
@@ -123,12 +109,9 @@ export class Chat {
         }
       }
     } catch (loginError: any) {
-      // Если бэкенд вернул 404, значит пользователя нет в базах agents и clients
       if (loginError.status === 404) {
         console.log('User not found in DB, checking applications...');
-        // Переходим к проверке заявок ниже (ничего не делаем, просто выходим из catch)
       } else {
-        // Если это не 404 (например, 500 или проблемы с сетью), показываем ошибку
         console.error('Login error:', loginError);
         await this.addBotMessage('⚠️ Произошла ошибка при подключении к серверу. Попробуйте еще раз.');
         this.state.set('asking_phone');
@@ -136,7 +119,6 @@ export class Chat {
       }
     }
 
-    // 3. Если пользователя нет (был 404), проверяем статус заявки на регистрацию агента
     try {
       const app = await firstValueFrom(this.api.getApplicationByPhone(phone));
 
@@ -160,8 +142,58 @@ export class Chat {
           });
           return;
         } else if (app.status === 'approved') {
-          await this.addBotMessage(`✅ Ваша заявка одобрена! Но профиль еще не создан. Обратитесь к администратору.`);
-          this.state.set('welcome');
+          await this.addBotMessage(`✅ Ваша заявка одобрена! Добро пожаловать в систему! 🎉`);
+
+          let agentData: Agent | null = null;
+          let token: string | null = null;
+
+          // Пытаемся получить токен и профиль с бэкенда
+          try {
+            const retryLogin = await firstValueFrom(this.api.login({ phone }));
+            if (retryLogin?.access_token) {
+              token = retryLogin.access_token;
+              agentData = await firstValueFrom(this.api.getMyProfile());
+            }
+          } catch (retryError) {
+            console.warn('Агент еще не создан в БД бэкендом, используем данные заявки для UI');
+          }
+
+          // Если бэкенд не вернул профиль, собираем его из данных заявки, чтобы меню отобразилось
+          if (!agentData) {
+            agentData = {
+              id: app.agent_id || 0,
+              max_user_id: app.max_user_id || this.phoneToId(phone),
+              phone: app.phone,
+              email: app.email,
+              registration_type: app.registration_type,
+              status: 'active' as any,
+              referral_code: 'GENERATING',
+              balance: 0,
+              total_clients: 0,
+              total_purchases_amount: 0,
+              total_commission_earned: 0,
+              total_referrals_count: 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              approved_at: new Date().toISOString()
+            } as Agent;
+          }
+
+          // Сохраняем данные
+          if (token) {
+            this.auth.setAuth(token, agentData, phone, 'agent');
+          } else {
+            // Сохраняем в стейт без токена, чтобы UI отрисовал меню
+            this.auth.user.set(agentData);
+            this.auth.role.set('agent');
+            this.auth.phone.set(phone);
+          }
+
+          this.currentUser = agentData;
+
+          await this.delay(400);
+          await this.addBotMessage(`Рады видеть вас, ${agentData.email?.split('@')[0] || 'Агент'}! 👋`);
+          await this.showAgentMenu();
           return;
         }
       }
@@ -169,7 +201,6 @@ export class Chat {
       console.log('Application not found, starting registration...');
     }
 
-    // 4. Ничего не найдено - начинаем регистрацию
     const urlParams = new URLSearchParams(window.location.search);
     const referralCode = urlParams.get('ref');
 
@@ -189,8 +220,6 @@ export class Chat {
       });
     }
   }
-
-
 
   async handleButtonAction(action: string, data?: any): Promise<void> {
     switch (action) {
@@ -252,20 +281,20 @@ export class Chat {
   private async startAgentRegistration(): Promise<void> {
     this.registrationStep.set(1);
     this.registrationData = { phone: '', email: '', registration_type: '', referral_code: null };
-    this.state.set('checking_phone'); // Скрываем предыдущие поля
+    this.state.set('checking_phone');
     await this.addBotMessage('Отлично! Давайте заполним анкету. Шаг 1 из 4.\n\n📱 **Ваш номер телефона:**');
-    this.state.set('agent_registration'); // Поле появится ПОСЛЕ вопроса
+    this.state.set('agent_registration');
   }
 
   async submitRegStep(step: number, value: string): Promise<void> {
     this.addUserMessage(value);
-    this.state.set('checking_phone'); // Скрываем поле, пока бот "думает"
+    this.state.set('checking_phone');
 
     if (step === 1) {
       this.registrationData.phone = value;
       await this.addBotMessage('✅ Отлично!\n\n📧 **Шаг 2: Укажите ваш email:**');
       this.registrationStep.set(2);
-      this.state.set('agent_registration'); // Показываем поле email
+      this.state.set('agent_registration');
     } else if (step === 2) {
       this.registrationData.email = value;
       await this.addBotMessage('✅ Email принят!\n\n🏢 **Шаг 3: Выберите ваш статус:**');
@@ -446,7 +475,14 @@ export class Chat {
     try {
       const stats = await firstValueFrom(this.api.getReferralStats());
       const agent = this.auth.agent();
-      const url = `${window.location.origin}?ref=${agent?.referral_code}`;
+
+      if (!agent || !agent.referral_code) {
+        this.toast.error('Не удалось получить реферальный код');
+        await this.addBackButton();
+        return;
+      }
+
+      const url = `${window.location.origin}?ref=${agent.referral_code}`;
       await this.addBotMessage('', {
         type: 'card',
         cardData: { type: 'referral', data: stats, url }
