@@ -1,7 +1,7 @@
 """Роутер аутентификации"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from auth import create_access_token, get_agent_by_user_id, get_client_by_phone
+from auth import create_access_token, get_agent_by_user_id, get_client_by_phone, get_agent_by_phone
 from database import get_session
 from pydantic import BaseModel
 
