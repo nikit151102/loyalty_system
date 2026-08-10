@@ -35,6 +35,10 @@
         <app-email-input (emailSubmit)="onRegStepSubmit(2, $event)" [@messageEnter] placeholder="Введите email" />
         }
 
+        @if (chat.state() === 'agent_registration' && chat.registrationStep() === 3) {
+        <app-text-input (textSubmit)="onRegStepSubmit(3, $event)" [@messageEnter] placeholder="Введите город" type="text" />
+        }
+
         <!-- Регистрация клиента -->
         @if (chat.state() === 'client_registration' && chat.registrationStep() === 1) {
         <app-phone-input (phoneSubmit)="onClientStepSubmit(1, $event)" [@messageEnter] placeholder="Введите ИНН" />

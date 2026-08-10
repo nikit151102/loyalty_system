@@ -29,7 +29,7 @@ export class Api {
     }
 
     // ==================== APPLICATIONS ====================
-    registerAgent(data: { max_user_id: number; phone: string; email: string; registration_type: string; referral_code?: string }): Observable<Application> {
+    registerAgent(data: { max_user_id: number; phone: string; email: string; city: string; registration_type: string; referral_code?: string }): Observable<Application> {
         const url = data.referral_code
             ? `${this.config.API_URL}/applications/register/${data.referral_code}`
             : `${this.config.API_URL}/applications/register`;

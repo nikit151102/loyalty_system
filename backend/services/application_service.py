@@ -24,14 +24,14 @@ class ApplicationService:
         if existing: 
             raise ValueError("Заявка уже на рассмотрении")
         
-        # Нормализуем город для проверки
-        normalized_city = city.strip().lower()
+        # Нормализуем город для проверки (с проверкой на None)
+        normalized_city = city.strip().lower() if city else ""
         
         # Очищаем номер телефона от префиксов
         clean_phone = phone.replace('+7', '').replace('8', '').replace(' ', '').replace('-', '')
         
         # Генерируем реферальный код на основе города
-        if 'барнаул' in normalized_city:  # Проверяем наличие слова "барнаул" (даже с опечатками)
+        if 'барнаул' in normalized_city:
             generated_referral_code = f"V{clean_phone}"
         else:
             generated_referral_code = f"G{clean_phone}"
@@ -40,23 +40,19 @@ class ApplicationService:
             max_user_id=max_user_id,
             phone=phone,
             email=email,
-            city=city,  # Сохраняем город
-            referral_code=generated_referral_code,  # Сохраняем сгенерированный код
+            city=city,
             registration_type=registration_type,
             status=ApplicationStatus.PENDING,
         )
         
+        # Сохраняем сгенерированный код в rejection_reason с префиксом REF:
+        application.rejection_reason = f"REF:{generated_referral_code}"
+        
         session.add(application)
         await session.flush()
         
-        # Если был передан внешний referral_code (от приглашающего агента), сохраняем его отдельно
-        if referral_code:
-            # Можно добавить поле invited_by_referral_code в модель Application
-            # или использовать для поиска пригласившего агента
-            pass
-        
-        return application
-    
+        return application  
+
     @staticmethod
     async def get_pending_by_user(session: AsyncSession, max_user_id: int) -> Optional[Application]:
         result = await session.execute(select(Application).where(
@@ -85,6 +81,7 @@ class ApplicationService:
         result = await session.execute(query.order_by(Application.created_at.desc()).offset(skip).limit(limit))
         return list(result.scalars().all()), total
         
+
     @staticmethod
     async def approve_application(session: AsyncSession, application_id: int, reviewed_by: int):
         import asyncio
@@ -93,24 +90,31 @@ class ApplicationService:
         result = await session.execute(select(Application).where(Application.id == application_id))
         application = result.scalar_one_or_none()
         if not application: raise ValueError("Заявка не найдена")
-        # if application.status != ApplicationStatus.PENDING: raise ValueError("Заявка уже рассмотрена")
         
+        # Извлекаем реферальный код из rejection_reason
+        referral_code_for_agent = None
         invited_by_agent_id = None
-        if application.rejection_reason and application.rejection_reason.startswith("REF:"):
-            referral_code = application.rejection_reason[4:]
-            inviter = await AgentService.get_agent_by_referral_code(session, referral_code)
-            if inviter: invited_by_agent_id = inviter.id
         
+        if application.rejection_reason and application.rejection_reason.startswith("REF:"):
+            referral_code_for_agent = application.rejection_reason[4:]  # Убираем префикс "REF:"
+        
+        # Создаём агента с переданным реферальным кодом
         agent = await AgentService.create_agent(
-            session=session, max_user_id=application.max_user_id, phone=application.phone,
-            email=application.email, registration_type=application.registration_type,
-            invited_by_agent_id=invited_by_agent_id)
+            session=session, 
+            max_user_id=application.max_user_id, 
+            phone=application.phone,
+            email=application.email, 
+            city=application.city,
+            registration_type=application.registration_type,
+            invited_by_agent_id=invited_by_agent_id,
+            referral_code=referral_code_for_agent  # ПЕРЕДАЁМ СГЕНЕРИРОВАННЫЙ КОД
+        )
         
         application.status = ApplicationStatus.APPROVED
         application.agent_id = agent.id
         application.reviewed_by = reviewed_by
         application.reviewed_at = datetime.utcnow()
-        application.rejection_reason = None
+        application.rejection_reason = None  # Очищаем после использования
         agent.approved_at = datetime.utcnow()
         
         # Реферальная связь 1 уровня
@@ -121,15 +125,12 @@ class ApplicationService:
             if inviter and inviter.invited_by_agent_id:
                 await ReferralService.create_referral(session, inviter.invited_by_agent_id, agent.id, 2)
         
-        # Сохраняем user_id для отправки уведомления ПОСЛЕ коммита
         user_id_to_notify = application.max_user_id
         agent_id_for_notify = agent.id
         
         await session.flush()
         
-        # ===== НОВОЕ: Отправка уведомления (асинхронно, не блокируя транзакцию) =====
         try:
-            # Создаём задачу, которая выполнится параллельно
             asyncio.create_task(
                 NotificationService.notify_application_approved(
                     user_id=user_id_to_notify,
@@ -137,7 +138,6 @@ class ApplicationService:
                 )
             )
         except Exception as e:
-            # Не даём ошибке уведомления сломать одобрение заявки
             import logging
             logging.getLogger(__name__).error(f"Ошибка уведомления: {e}")
         

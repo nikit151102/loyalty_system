@@ -25,6 +25,7 @@ export class Chat {
   registrationData: any = {
     phone: '',
     email: '',
+    city: '',
     registration_type: '',
     referral_code: null,
     inn: ''
@@ -85,8 +86,6 @@ export class Chat {
 
     await this.addBotMessage('🔍 Проверяю данные в базе...');
 
-    // 1. Пытаемся авторизоваться. 
-    // Если на бэкенде есть одобренная заявка, он сам создаст агента и вернет токен.
     try {
       const loginRes = await firstValueFrom(this.api.login({ phone }));
 
@@ -124,7 +123,6 @@ export class Chat {
       }
     }
 
-    // 2. Если авторизация не удалась (404), проверяем статус заявки
     try {
       const app = await firstValueFrom(this.api.getApplicationByPhone(phone));
 
@@ -150,8 +148,6 @@ export class Chat {
           return;
         } 
         else if (app.status === 'approved') {
-          // Fallback: если бэкенд не создал агента автоматически при login,
-          // пытаемся залогиниться еще раз, а если не выйдет - используем данные заявки для UI.
           await this.addBotMessage(`✅ Ваша заявка одобрена! Добро пожаловать в систему! 🎉`);
 
           let agentData: Agent | null = null;
@@ -207,7 +203,6 @@ export class Chat {
       console.log('Application not found, starting registration...');
     }
 
-    // 3. Ничего не найдено - начинаем процесс регистрации
     const urlParams = new URLSearchParams(window.location.search);
     const referralCode = urlParams.get('ref');
 
@@ -267,7 +262,7 @@ export class Chat {
         break;
       case 'select_type':
         this.registrationData.registration_type = data;
-        this.registrationStep.set(4);
+        this.registrationStep.set(5);
         await this.confirmRegistration();
         break;
       case 'confirm_register':
@@ -287,9 +282,9 @@ export class Chat {
 
   private async startAgentRegistration(): Promise<void> {
     this.registrationStep.set(1);
-    this.registrationData = { phone: '', email: '', registration_type: '', referral_code: null };
+    this.registrationData = { phone: '', email: '', city: '', registration_type: '', referral_code: null };
     this.state.set('checking_phone');
-    await this.addBotMessage('Отлично! Давайте заполним анкету. Шаг 1 из 4.\n\n📱 **Ваш номер телефона:**');
+    await this.addBotMessage('Отлично! Давайте заполним анкету. Шаг 1 из 5.\n\n📱 **Ваш номер телефона:**');
     this.state.set('agent_registration');
   }
 
@@ -304,8 +299,13 @@ export class Chat {
       this.state.set('agent_registration');
     } else if (step === 2) {
       this.registrationData.email = value;
-      await this.addBotMessage('✅ Email принят!\n\n🏢 **Шаг 3: Выберите ваш статус:**');
+      await this.addBotMessage('✅ Email принят!\n\n🏙️ **Шаг 3: Укажите ваш город:**');
       this.registrationStep.set(3);
+      this.state.set('agent_registration');
+    } else if (step === 3) {
+      this.registrationData.city = value;
+      await this.addBotMessage('✅ Город принят!\n\n🏢 **Шаг 4: Выберите ваш статус:**');
+      this.registrationStep.set(4);
       this.state.set('agent_registration');
       await this.addBotMessage('', {
         type: 'buttons',
@@ -324,7 +324,7 @@ export class Chat {
       'ip': '💼 Индивидуальный предприниматель',
       'legal_entity': '🏛 Юридическое лицо'
     };
-    await this.addBotMessage(`📋 **Шаг 4: Проверьте данные**\n\n📱 Телефон: ${this.registrationData.phone}\n📧 Email: ${this.registrationData.email}\n🏢 Статус: ${typeLabels[this.registrationData.registration_type]}\n\nВсё верно?`);
+    await this.addBotMessage(`📋 **Шаг 5: Проверьте данные**\n\n📱 Телефон: ${this.registrationData.phone}\n📧 Email: ${this.registrationData.email}\n🏙️ Город: ${this.registrationData.city}\n🏢 Статус: ${typeLabels[this.registrationData.registration_type]}\n\nВсё верно?`);
     await this.addBotMessage('', {
       type: 'buttons',
       buttons: [
@@ -343,6 +343,7 @@ export class Chat {
         max_user_id: maxUserId,
         phone: this.registrationData.phone,
         email: this.registrationData.email,
+        city: this.registrationData.city,
         registration_type: this.registrationData.registration_type,
         referral_code: this.registrationData.referral_code
       }));
