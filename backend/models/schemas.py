@@ -15,6 +15,7 @@ class AgentRegisterRequest(BaseModel):
     phone: str
     email: EmailStr
     registration_type: str
+    city: Optional[str]  = None
     
     @field_validator("phone")
     @classmethod
@@ -39,6 +40,7 @@ class AgentResponse(BaseModel):
     max_user_id: int
     phone: str
     email: str
+    city: Optional[str]  = None
     registration_type: str
     status: str
     referral_code: str
@@ -67,6 +69,7 @@ class ApplicationResponse(BaseModel):
     email: str
     registration_type: str
     status: str
+    city: Optional[str]  = None
     rejection_reason: Optional[str] = None
     created_at: datetime
     reviewed_at: Optional[datetime] = None

@@ -17,7 +17,7 @@ async def register_agent(data: AgentRegisterRequest, session: AsyncSession = Dep
     try:
         existing = await get_agent_by_user_id(data.max_user_id, session)
         if existing: raise HTTPException(status_code=400, detail="Вы уже являетесь агентом")
-        app = await ApplicationService.create_application(session, data.max_user_id, data.phone, data.email, RegistrationType(data.registration_type))
+        app = await ApplicationService.create_application(session, data.max_user_id, data.phone, data.email, data.city, RegistrationType(data.registration_type))
         return ApplicationResponse.model_validate(app)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

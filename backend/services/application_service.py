@@ -11,18 +11,50 @@ from services.referral_service import ReferralService
 class ApplicationService:
     
     @staticmethod
-    async def create_application(session: AsyncSession, max_user_id: int, phone: str, email: str,
-                                registration_type: RegistrationType, referral_code: Optional[str] = None) -> Application:
+    async def create_application(
+        session: AsyncSession, 
+        max_user_id: int, 
+        phone: str, 
+        email: str, 
+        city: str,
+        registration_type: RegistrationType, 
+        referral_code: Optional[str] = None
+    ) -> Application:
         existing = await ApplicationService.get_pending_by_user(session, max_user_id)
-        if existing: raise ValueError("Заявка уже на рассмотрении")
+        if existing: 
+            raise ValueError("Заявка уже на рассмотрении")
+        
+        # Нормализуем город для проверки
+        normalized_city = city.strip().lower()
+        
+        # Очищаем номер телефона от префиксов
+        clean_phone = phone.replace('+7', '').replace('8', '').replace(' ', '').replace('-', '')
+        
+        # Генерируем реферальный код на основе города
+        if 'барнаул' in normalized_city:  # Проверяем наличие слова "барнаул" (даже с опечатками)
+            generated_referral_code = f"V{clean_phone}"
+        else:
+            generated_referral_code = f"G{clean_phone}"
+        
         application = Application(
-            max_user_id=max_user_id, phone=phone, email=email,
-            registration_type=registration_type, status=ApplicationStatus.PENDING,
+            max_user_id=max_user_id,
+            phone=phone,
+            email=email,
+            city=city,  # Сохраняем город
+            referral_code=generated_referral_code,  # Сохраняем сгенерированный код
+            registration_type=registration_type,
+            status=ApplicationStatus.PENDING,
         )
+        
         session.add(application)
         await session.flush()
+        
+        # Если был передан внешний referral_code (от приглашающего агента), сохраняем его отдельно
         if referral_code:
-            application.rejection_reason = f"REF:{referral_code}"
+            # Можно добавить поле invited_by_referral_code в модель Application
+            # или использовать для поиска пригласившего агента
+            pass
+        
         return application
     
     @staticmethod
