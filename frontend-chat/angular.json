@@ -60,6 +60,12 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "host": "0.0.0.0",
+            "allowedHosts": [
+              "xn--80akxggcl.xn--80akonecy.xn--p1ai"
+            ]
+          },
           "configurations": {
             "production": {
               "buildTarget": "frontend-chat:build:production"
