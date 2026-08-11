@@ -54,14 +54,14 @@ export class Chat {
     if (this.auth.isLoggedIn()) {
       const role = this.auth.role();
       const phone = this.auth.phone();
-      
+
       if (role && phone) {
         this.state.set('checking_phone');
         try {
           const loginRes = await firstValueFrom(this.api.login({ phone, role }));
           if (loginRes?.access_token) {
             await this._handleSuccessfulLogin(loginRes, phone);
-            return; 
+            return;
           }
         } catch (e) {
           console.warn('Сессия недействительна, выполняем выход');
@@ -148,7 +148,7 @@ export class Chat {
 
       if (loginRes?.access_token) {
         localStorage.setItem(this.TOKEN_KEY, loginRes.access_token);
-        
+
         if (hasReferral && loginRes.role === 'agent') {
           await this.addBotMessage(`⚠️ Этот номер уже зарегистрирован как **Агент**.\n\nНо вы перешли по реферальной ссылке! Хотите также зарегистрироваться как **Клиент** этого агента?`);
           await this.addBotMessage('', {
@@ -264,7 +264,7 @@ export class Chat {
       case 'enter_as_agent':
         if (this._currentPhone) await this._loginWithRole(this._currentPhone, 'agent');
         break;
-      
+
       // === ПЕРЕКЛЮЧЕНИЕ МЕЖДУ РОЛЯМИ ===
       case 'switch_to_client':
         await this._switchToClient();
@@ -347,7 +347,7 @@ export class Chat {
   private async _switchToClient(): Promise<void> {
     const phone = this.auth.phone() || this._currentPhone;
     if (!phone) { this.goToWelcome(); return; }
-    
+
     this.state.set('checking_phone');
     await this.addBotMessage('🔄 Переключаю в режим Клиента...');
     try {
@@ -362,7 +362,7 @@ export class Chat {
   private async _switchToAgent(): Promise<void> {
     const phone = this.auth.phone() || this._currentPhone;
     if (!phone) { this.goToWelcome(); return; }
-    
+
     this.state.set('checking_phone');
     await this.addBotMessage('🔄 Переключаю в режим Агента...');
     try {
@@ -383,7 +383,7 @@ export class Chat {
       await this.delay(400);
       await this.addBotMessage(`Рады видеть вас снова, ${agent.email?.split('@')[0] || 'Агент'}! 👋`);
       await this.showAgentMenu();
-    } 
+    }
     else if (loginRes.role === 'client') {
       const client = await firstValueFrom(this.api.getMyClientProfile());
       this.auth.setAuth(loginRes.access_token, client, phone, 'client');
@@ -469,6 +469,7 @@ export class Chat {
 
   // ==================== CLIENT REGISTRATION FLOW ====================
 
+
   private async startClientRegistration(): Promise<void> {
     this.registrationStep.set(1);
     this.state.set('checking_phone');
@@ -478,7 +479,7 @@ export class Chat {
 
   async submitClientStep(step: number, value: string): Promise<void> {
     this.addUserMessage(value);
-    this.state.set('checking_phone');
+    this.state.set('checking_phone'); // Скрываем поле ввода пока бот "думает"
 
     if (step === 1) {
       this.registrationData.inn = value;
@@ -497,8 +498,10 @@ export class Chat {
       try {
         const client = await firstValueFrom(this.api.registerClient({
           full_name: `Клиент ${this.registrationData.phone}`,
-          inn: this.registrationData.inn, phone: this.registrationData.phone,
-          email: this.registrationData.email, referral_code: this.registrationData.referral_code,
+          inn: this.registrationData.inn,
+          phone: this.registrationData.phone,
+          email: this.registrationData.email,
+          referral_code: this.registrationData.referral_code,
           client_type: 'individual'
         }));
 
@@ -518,11 +521,12 @@ export class Chat {
     }
   }
 
+
   // ==================== MENUS ====================
 
   private async showAgentMenu(): Promise<void> {
     this.state.set('agent_menu');
-    
+
     let isAlsoClient = false;
     const phone = this.auth.phone() || this._currentPhone;
     if (phone) {
@@ -537,23 +541,23 @@ export class Chat {
     }
 
     const buttons: any[] = [];
-    
+
     if (isAlsoClient) {
-      buttons.push({ 
-        id: 'switch_to_client', 
-        label: 'Переключить в режим Клиента', 
-        action: 'switch_to_client', 
-        variant: 'secondary', 
-        icon: '🔄' 
+      buttons.push({
+        id: 'switch_to_client',
+        label: 'Переключить в режим Клиента',
+        action: 'switch_to_client',
+        variant: 'secondary',
+        icon: '🔄'
       });
     }
 
     buttons.push(
-      { id: 'm1', label: 'Статистика', action: 'show_stats', variant: 'primary', icon: '📊' },
-      { id: 'm2', label: 'Мои клиенты', action: 'show_clients', variant: 'primary', icon: '👥' },
-      { id: 'm3', label: 'Добавить клиента', action: 'add_client', variant: 'primary', icon: '➕' },
+      // { id: 'm1', label: 'Статистика', action: 'show_stats', variant: 'primary', icon: '📊' },
+      // { id: 'm2', label: 'Мои клиенты', action: 'show_clients', variant: 'primary', icon: '👥' },
+      // { id: 'm3', label: 'Добавить клиента', action: 'add_client', variant: 'primary', icon: '➕' },
       { id: 'm4', label: 'Реферальная ссылка', action: 'show_referral', variant: 'primary', icon: '🔗' },
-      { id: 'm5', label: 'Статус заявки', action: 'check_status', variant: 'outline', icon: '📋' },
+      // { id: 'm5', label: 'Статус заявки', action: 'check_status', variant: 'outline', icon: '📋' },
       { id: 'm6', label: 'Выйти', action: 'logout', variant: 'danger', icon: '🚪' }
     );
 
@@ -566,7 +570,7 @@ export class Chat {
 
   private async showClientMenu(client: Client): Promise<void> {
     this.state.set('client_menu');
-    
+
     let isAlsoAgent = false;
     const phone = this.auth.phone() || this._currentPhone;
     if (phone) {
@@ -581,21 +585,21 @@ export class Chat {
     }
 
     const buttons: any[] = [];
-    
+
     if (isAlsoAgent) {
-      buttons.push({ 
-        id: 'switch_to_agent', 
-        label: 'Переключить в режим Агента', 
-        action: 'switch_to_agent', 
-        variant: 'secondary', 
-        icon: '🔄' 
+      buttons.push({
+        id: 'switch_to_agent',
+        label: 'Переключить в режим Агента',
+        action: 'switch_to_agent',
+        variant: 'secondary',
+        icon: '🔄'
       });
     }
 
     buttons.push(
       { id: 'c1', label: 'Мой QR-код', action: 'show_qr', variant: 'primary', icon: '🎫', data: client },
       { id: 'c2', label: 'История покупок', action: 'show_history', variant: 'primary', icon: '📜', data: client },
-      { id: 'c3', label: 'Мой профиль', action: 'show_profile', variant: 'outline', icon: '👤', data: client },
+      // { id: 'c3', label: 'Мой профиль', action: 'show_profile', variant: 'outline', icon: '👤', data: client },
       { id: 'c4', label: 'Выйти', action: 'logout', variant: 'danger', icon: '🚪' }
     );
 

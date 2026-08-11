@@ -3,8 +3,11 @@
     <p class="subtitle">Делитесь ссылкой и получайте проценты от покупок приглашённых!</p>
 
     <div class="url-box">
-        <input [value]="url" readonly #urlInput />
-        <button class="copy-btn" (click)="copyUrl(urlInput)">
+        <!-- Добавили type="text" и autocomplete="off" для максимальной защиты -->
+        <input type="text" [value]="url" readonly autocomplete="off" spellcheck="false" />
+        
+        <!-- Убрали передачу аргумента, метод сам возьмет правильный this.url -->
+        <button class="copy-btn" (click)="copyUrl()">
             {{ copied ? '✓ Скопировано' : '📋 Копировать' }}
         </button>
     </div>
@@ -14,14 +17,14 @@
             <div class="stat-num">{{ stats?.total_referrals || 0 }}</div>
             <div class="stat-lbl">Приглашено</div>
         </div>
-        <div class="stat-item">
+        <!-- <div class="stat-item">
             <div class="stat-num">{{ stats?.level1_referrals || 0 }}</div>
             <div class="stat-lbl">1 уровень</div>
         </div>
         <div class="stat-item">
             <div class="stat-num">{{ stats?.level2_referrals || 0 }}</div>
             <div class="stat-lbl">2 уровень</div>
-        </div>
+        </div> -->
     </div>
 
     <div class="conditions">
@@ -29,8 +32,8 @@
         <ul>
             <li><strong>3%</strong> — с оборота рефералов до 100 000 ₽</li>
             <li><strong>5%</strong> — с оборота свыше 100 000 ₽</li>
-            <li>Бонусы начисляются автоматически за каждый оборот</li>
-            <li>Реферальная система работает на 2 уровня</li>
+            <!-- <li>Бонусы начисляются автоматически за каждый оборот</li>
+            <li>Реферальная система работает на 2 уровня</li> -->
         </ul>
     </div>
 </div>

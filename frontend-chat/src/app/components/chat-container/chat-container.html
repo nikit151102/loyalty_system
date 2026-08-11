@@ -1,7 +1,7 @@
 <div class="chat-container">
     <!-- Header -->
     <div class="chat-header">
-        <div class="bot-avatar">{{ config.BOT_AVATAR }}</div>
+        <div class="bot-avatar"><img src="avatar-chat.png" alt="" width="40px"></div>
         <div class="bot-info">
             <div class="bot-name">{{ config.BOT_NAME }}</div>
             <div class="bot-status">
@@ -39,9 +39,9 @@
         <app-text-input (textSubmit)="onRegStepSubmit(3, $event)" [@messageEnter] placeholder="Введите город" type="text" />
         }
 
-        <!-- Регистрация клиента -->
+        <!-- Регистрация клиента (ИСПРАВЛЕНО: ИНН через text-input) -->
         @if (chat.state() === 'client_registration' && chat.registrationStep() === 1) {
-        <app-phone-input (phoneSubmit)="onClientStepSubmit(1, $event)" [@messageEnter] placeholder="Введите ИНН" />
+        <app-text-input (textSubmit)="onClientStepSubmit(1, $event)" [@messageEnter] placeholder="Введите ИНН (10 или 12 цифр)" type="text" />
         }
         
         @if (chat.state() === 'client_registration' && chat.registrationStep() === 2) {

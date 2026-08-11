@@ -1,6 +1,6 @@
 <div class="bubble-wrapper" [class.user]="message.sender === 'user'">
     @if (message.sender === 'bot') {
-    <div class="avatar">🤖</div>
+    <div class="avatar"><img src="avatar-chat.png" alt="" width="40px"></div>
     }
 
     <div class="bubble" [class.user-bubble]="message.sender === 'user'" [class.bot-bubble]="message.sender === 'bot'">
