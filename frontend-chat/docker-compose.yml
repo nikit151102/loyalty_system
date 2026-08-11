@@ -1,0 +1,7 @@
+services:
+  frontend:
+    build:
+      context: ./
+      dockerfile: Dockerfile-frontend
+    ports:
+      - 6900:6900
