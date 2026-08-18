@@ -75,7 +75,7 @@ export class Chat {
 
   private async initFlow(): Promise<void> {
     if (this.registrationData.referral_code) {
-      await this.addBotMessage(`Привет! 👋 Я ${this.config.BOT_NAME} — помощник программы лояльности.`);
+      await this.addBotMessage(`Привет! 👋 Я помощник программы лояльности.`);
       await this.delay(400);
       await this.addBotMessage(`🎁 Вы перешли по реферальной ссылке!\nЧтобы стать клиентом программы, введите ваш номер телефона:`);
     } else {
