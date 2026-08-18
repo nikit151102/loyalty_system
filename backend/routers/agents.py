@@ -7,7 +7,7 @@ from database import get_session
 from models.schemas import AgentResponse, AgentStatusResponse, AgentStatsResponse
 from services.agent_service import AgentService
 from services.application_service import ApplicationService
-from models.db_models import ApplicationStatus
+from models.db_models import ApplicationStatus, Client
 from sqlalchemy import select
 from sqlalchemy.sql import func
 
