@@ -38,7 +38,7 @@ class ApplicationService:
             generated_referral_code = f"G{clean_phone}"
         
         application = Application(
-            full_name=app.full_name, 
+            full_name=full_name, 
             max_user_id=max_user_id,
             phone=phone,
             email=email,
