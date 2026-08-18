@@ -16,18 +16,11 @@ export interface Agent {
 }
 
 export interface AgentStats {
-  agent_id: number;
-  total_commission_earned: number;
-  balance: number;
-  total_clients: number;
-  total_purchases_amount: number;
-  total_referrals: number;
-  level1_referrals: number;
-  level2_referrals: number;
-  average_commission_rate: number;
-  commission_by_rate: Record<string, number>;
-  top_clients: any[];
-  monthly_earnings: { month: string; amount: number }[];
+  total_referred_clients: number;
+  active_referred_clients: number;
+  total_referred_purchases_count: number;
+  total_referred_purchases_amount: number;
+  total_referred_commission_earned: number;
 }
 
 export interface Application {
@@ -40,3 +33,4 @@ export interface Application {
   rejection_reason?: string;
   created_at: string;
 }
+

@@ -26,6 +26,7 @@ export class Chat {
     phone: '',
     email: '',
     city: '',
+    full_name: '',
     registration_type: '',
     referral_code: null,
     inn: ''
@@ -313,15 +314,27 @@ export class Chat {
         break;
       case 'select_type':
         this.registrationData.registration_type = data;
-        this.registrationStep.set(5);
+        this.registrationStep.set(6);
         await this.confirmRegistration();
         break;
       case 'confirm_register':
         await this.submitRegistration();
         break;
       case 'edit_register':
-        this.registrationStep.set(1);
-        await this.startAgentRegistration();
+        const savedRef = this.registrationData.referral_code;
+        this.registrationData = {
+          phone: this._currentPhone || '',
+          email: '',
+          city: '',
+          full_name: '',
+          registration_type: '',
+          referral_code: savedRef,
+          inn: ''
+        };
+        this.registrationStep.set(2);
+        this.state.set('checking_phone');
+        await this.addBotMessage(`Давайте заполним анкету заново.\n\n👤 **Шаг 1: Укажите ваше ФИО:**`);
+        this.state.set('agent_registration');
         break;
       case 'cancel_register':
         this.goToWelcome();
@@ -397,68 +410,86 @@ export class Chat {
   // ==================== AGENT REGISTRATION FLOW ====================
 
   private async startAgentRegistration(): Promise<void> {
-    this.registrationStep.set(1);
     const savedRef = this.registrationData.referral_code;
-    this.registrationData = { phone: '', email: '', city: '', registration_type: '', referral_code: savedRef, inn: '' };
+
+    this.registrationData = {
+      phone: this._currentPhone || '',
+      email: '',
+      city: '',
+      full_name: '',
+      registration_type: '',
+      referral_code: savedRef,
+      inn: ''
+    };
+
+    this.registrationStep.set(2);
     this.state.set('checking_phone');
-    await this.addBotMessage('Отлично! Давайте заполним анкету. Шаг 1 из 5.\n\n📱 **Ваш номер телефона:**');
+
+    await this.addBotMessage(`Отлично! Номер **${this._currentPhone}** сохранен.\n\n👤 **Шаг 1: Укажите ваше ФИО:**`);
     this.state.set('agent_registration');
   }
+
 
   async submitRegStep(step: number, value: string): Promise<void> {
     this.addUserMessage(value);
     this.state.set('checking_phone');
 
-    if (step === 1) {
-      this.registrationData.phone = value;
-      await this.addBotMessage('✅ Отлично!\n\n📧 **Шаг 2: Укажите ваш email:**');
-      this.registrationStep.set(2);
-      this.state.set('agent_registration');
-    } else if (step === 2) {
-      this.registrationData.email = value;
-      await this.addBotMessage('✅ Email принят!\n\n🏙️ **Шаг 3: Укажите ваш город:**');
+    // ИЗМЕНЕНО: Логика сдвинута на 1 шаг, так как мы начинаем с шага 2
+    if (step === 2) {
+      this.registrationData.full_name = value;
+      await this.addBotMessage('✅ ФИО принято!\n\n📧 **Шаг 2: Укажите ваш email:**');
       this.registrationStep.set(3);
       this.state.set('agent_registration');
     } else if (step === 3) {
+      this.registrationData.email = value;
+      await this.addBotMessage('✅ Email принят!\n\n🏙️ **Шаг 3: Укажите ваш город:**');
+      this.registrationStep.set(4);
+      this.state.set('agent_registration');
+    } else if (step === 4) {
       this.registrationData.city = value;
       await this.addBotMessage('✅ Город принят!\n\n🏢 **Шаг 4: Выберите ваш статус:**');
-      this.registrationStep.set(4);
+      this.registrationStep.set(5);
       this.state.set('agent_registration');
       await this.addBotMessage('', {
         type: 'buttons',
         buttons: [
-          { id: 't1', label: '👨‍💼 Самозанятый', action: 'select_type', variant: 'outline', data: 'self_employed' },
-          { id: 't2', label: '💼 ИП', action: 'select_type', variant: 'outline', data: 'ip' },
-          { id: 't3', label: '🏛 Юридическое лицо', action: 'select_type', variant: 'outline', data: 'legal_entity' }
+          { id: 't1', label: 'Самозанятый', action: 'select_type', variant: 'outline', data: 'self_employed' },
+          { id: 't2', label: 'ИП', action: 'select_type', variant: 'outline', data: 'ip' },
+          { id: 't3', label: 'Юридическое лицо', action: 'select_type', variant: 'outline', data: 'legal_entity' }
         ]
       });
     }
   }
 
   private async confirmRegistration(): Promise<void> {
-    const typeLabels: any = { 'self_employed': '👨‍💼 Самозанятый', 'ip': '💼 Индивидуальный предприниматель', 'legal_entity': '🏛 Юридическое лицо' };
-    await this.addBotMessage(`📋 **Шаг 5: Проверьте данные**\n\n📱 Телефон: ${this.registrationData.phone}\n📧 Email: ${this.registrationData.email}\n🏙️ Город: ${this.registrationData.city}\n🏢 Статус: ${typeLabels[this.registrationData.registration_type]}\n\nВсё верно?`);
+    const typeLabels: any = { 'self_employed': 'Самозанятый', 'ip': 'Индивидуальный предприниматель', 'legal_entity': 'Юридическое лицо' };
+    await this.addBotMessage(`📋 **Шаг 5: Проверьте данные**\n\n👤 ФИО: ${this.registrationData.full_name}\n📱 Телефон: ${this.registrationData.phone}\n📧 Email: ${this.registrationData.email}\n🏙️ Город: ${this.registrationData.city}\n🏢 Статус: ${typeLabels[this.registrationData.registration_type]}\n\nВсё верно?`);
     await this.addBotMessage('', {
       type: 'buttons',
       buttons: [
-        { id: 'c1', label: '✅ Отправить заявку', action: 'confirm_register', variant: 'success' },
-        { id: 'c2', label: '✏️ Изменить', action: 'edit_register', variant: 'outline' },
-        { id: 'c3', label: '❌ Отменить', action: 'cancel_register', variant: 'danger' }
+        { id: 'c1', label: 'Отправить заявку', action: 'confirm_register', variant: 'primary' },
+        { id: 'c2', label: 'Изменить', action: 'edit_register', variant: 'outline' },
+        { id: 'c3', label: 'Отменить', action: 'cancel_register', variant: 'danger' }
       ]
     });
   }
 
+
   private async submitRegistration(): Promise<void> {
-    await this.addBotMessage('⏳ Отправляю заявку...');
+    await this.addBotMessage('Отправляю заявку...');
     try {
       const maxUserId = this.phoneToId(this.registrationData.phone);
       const app = await firstValueFrom(this.api.registerAgent({
-        max_user_id: maxUserId, phone: this.registrationData.phone, email: this.registrationData.email,
-        city: this.registrationData.city, registration_type: this.registrationData.registration_type,
+        max_user_id: maxUserId,
+        full_name: this.registrationData.full_name,
+        phone: this.registrationData.phone,
+        email: this.registrationData.email,
+        city: this.registrationData.city,
+        registration_type: this.registrationData.registration_type,
         referral_code: this.registrationData.referral_code
       }));
       this.currentApplication = app;
-      await this.addBotMessage(`✅ **Заявка успешно отправлена!** 🎉\n\nНомер заявки: #${app.id}\nМы рассмотрим её в ближайшее время.`);
+      await this.addBotMessage(`✅ **Заявка успешно отправлена!**\n\nНомер заявки: #${app.id}\nМы рассмотрим её в ближайшее время.`);
       this.state.set('agent_pending');
       await this.showPendingStatus();
     } catch (e: any) {
@@ -466,12 +497,14 @@ export class Chat {
       await this.addBotMessage(`❌ Произошла ошибка: ${e.error?.detail || 'попробуйте ещё раз'}`);
     }
   }
-
   // ==================== CLIENT REGISTRATION FLOW ====================
+
 
 
   private async startClientRegistration(): Promise<void> {
     this.registrationStep.set(1);
+    // Сохраняем известный номер телефона, чтобы он был готов к отправке на шаге 4
+    this.registrationData.phone = this._currentPhone || '';
     this.state.set('checking_phone');
     await this.addBotMessage('📝 Давайте зарегистрируем вас как клиента.\n\n🔢 Введите **ИНН** (10 или 12 цифр):');
     this.state.set('client_registration');
@@ -479,33 +512,33 @@ export class Chat {
 
   async submitClientStep(step: number, value: string): Promise<void> {
     this.addUserMessage(value);
-    this.state.set('checking_phone'); // Скрываем поле ввода пока бот "думает"
+    this.state.set('checking_phone');
 
     if (step === 1) {
       this.registrationData.inn = value;
-      await this.addBotMessage('✅ ИНН принят!\n\n📱 Введите ваш номер телефона:');
+      await this.addBotMessage('✅ ИНН принят!\n\n📧 Введите ваш email:'); // Email логичнее спросить перед ФИО
       this.registrationStep.set(2);
       this.state.set('client_registration');
     } else if (step === 2) {
-      this.registrationData.phone = value;
-      await this.addBotMessage('📧 Введите ваш email:');
+      this.registrationData.email = value;
+      await this.addBotMessage('👤 Введите ваше ФИО:');
       this.registrationStep.set(3);
       this.state.set('client_registration');
     } else if (step === 3) {
-      this.registrationData.email = value;
+      this.registrationData.full_name = value;
       await this.addBotMessage(`✅ Данные получены! Создаю ваш профиль клиента...`);
 
       try {
         const client = await firstValueFrom(this.api.registerClient({
-          full_name: `Клиент ${this.registrationData.phone}`,
+          full_name: this.registrationData.full_name,
           inn: this.registrationData.inn,
-          phone: this.registrationData.phone,
+          phone: this.registrationData.phone, // Здесь уже будет предзаполненный номер!
           email: this.registrationData.email,
           referral_code: this.registrationData.referral_code,
           client_type: 'individual'
         }));
 
-        this.toast.success('Клиент успешно зарегистрирован! 🎉');
+        this.toast.success('Клиент успешно зарегистрирован!');
         this.currentUser = client.client || client;
 
         if (client.access_token) {
@@ -553,11 +586,8 @@ export class Chat {
     }
 
     buttons.push(
-      // { id: 'm1', label: 'Статистика', action: 'show_stats', variant: 'primary', icon: '📊' },
-      // { id: 'm2', label: 'Мои клиенты', action: 'show_clients', variant: 'primary', icon: '👥' },
-      // { id: 'm3', label: 'Добавить клиента', action: 'add_client', variant: 'primary', icon: '➕' },
+      { id: 'm1', label: 'Статистика', action: 'show_stats', variant: 'primary', icon: '📊' },
       { id: 'm4', label: 'Реферальная ссылка', action: 'show_referral', variant: 'primary', icon: '🔗' },
-      // { id: 'm5', label: 'Статус заявки', action: 'check_status', variant: 'outline', icon: '📋' },
       { id: 'm6', label: 'Выйти', action: 'logout', variant: 'danger', icon: '🚪' }
     );
 
@@ -567,7 +597,6 @@ export class Chat {
       menuData: { buttons }
     });
   }
-
   private async showClientMenu(client: Client): Promise<void> {
     this.state.set('client_menu');
 
@@ -623,12 +652,27 @@ export class Chat {
 
   private async showAgentStats(): Promise<void> {
     this.state.set('agent_stats');
-    await this.addBotMessage('Загружаю вашу статистику...');
+    await this.addBotMessage('📊 Загружаю вашу статистику...');
     try {
       const stats = await firstValueFrom(this.api.getMyStats());
-      await this.addBotMessage('', { type: 'card', cardData: { type: 'stats', data: stats } });
+
+      // Вспомогательная функция для красивого форматирования денег (например: 125 000.50)
+      const formatMoney = (amount: number) =>
+        amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      const statsMessage = `📈 **Ваша реферальная статистика**
+
+👥 **Всего приглашено клиентов:** ${stats.total_referred_clients}
+✅ **Из них активных (совершили покупки):** ${stats.active_referred_clients}
+
+🛒 **Всего покупок рефералами:** ${stats.total_referred_purchases_count}
+💰 **Общая сумма покупок:** ${formatMoney(stats.total_referred_purchases_amount)} ₽
+💸 **Ваш заработанный бонус:** ${formatMoney(stats.total_referred_commission_earned)} ₽`;
+
+      await this.addBotMessage(statsMessage);
       await this.addBackButton();
     } catch (e) {
+      console.error('Ошибка загрузки статистики:', e);
       this.toast.error('Не удалось загрузить статистику');
       await this.addBackButton();
     }

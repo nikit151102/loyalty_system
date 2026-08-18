@@ -30,7 +30,7 @@ export class Api {
     }
 
     // ==================== APPLICATIONS ====================
-    registerAgent(data: { max_user_id: number; phone: string; email: string; city: string; registration_type: string; referral_code?: string }): Observable<Application> {
+    registerAgent(data: { max_user_id: number; full_name: string; phone: string; email: string; city: string; registration_type: string; referral_code?: string }): Observable<Application> {
         const url = data.referral_code
             ? `${this.config.API_URL}/applications/register/${data.referral_code}`
             : `${this.config.API_URL}/applications/register`;
@@ -68,7 +68,7 @@ export class Api {
 
     // ==================== STATS ====================
     getMyStats(): Observable<AgentStats> {
-        return this.http.get<AgentStats>(`${this.config.API_URL}/statistics/me`, { headers: this.headers() });
+        return this.http.get<AgentStats>(`${this.config.API_URL}/agents/me/stats`, { headers: this.headers() });
     }
 
     // ==================== CLIENTS ====================

@@ -13,6 +13,7 @@ class ApplicationService:
     @staticmethod
     async def create_application(
         session: AsyncSession, 
+        full_name: str,
         max_user_id: int, 
         phone: str, 
         email: str, 
@@ -37,6 +38,7 @@ class ApplicationService:
             generated_referral_code = f"G{clean_phone}"
         
         application = Application(
+            full_name=app.full_name, 
             max_user_id=max_user_id,
             phone=phone,
             email=email,
@@ -103,6 +105,7 @@ class ApplicationService:
         # Создаем или получаем агента (теперь с проверкой на дубликаты)
         agent = await AgentService.create_agent(
             session=session,
+            full_name=app.full_name,
             max_user_id=app.max_user_id,
             phone=app.phone,
             email=app.email,

@@ -27,29 +27,34 @@
         }
 
         <!-- Регистрация агента -->
-        @if (chat.state() === 'agent_registration' && chat.registrationStep() === 1) {
-        <app-phone-input (phoneSubmit)="onRegStepSubmit(1, $event)" [@messageEnter] placeholder="Введите номер телефона" />
-        }
-
         @if (chat.state() === 'agent_registration' && chat.registrationStep() === 2) {
-        <app-email-input (emailSubmit)="onRegStepSubmit(2, $event)" [@messageEnter] placeholder="Введите email" />
+        <app-text-input (textSubmit)="onRegStepSubmit(2, $event)" [@messageEnter] placeholder="Введите ФИО"
+            type="text" /> <!-- ДОБАВЛЕНО -->
         }
 
         @if (chat.state() === 'agent_registration' && chat.registrationStep() === 3) {
-        <app-text-input (textSubmit)="onRegStepSubmit(3, $event)" [@messageEnter] placeholder="Введите город" type="text" />
+        <app-email-input (emailSubmit)="onRegStepSubmit(3, $event)" [@messageEnter] placeholder="Введите email" />
         }
 
-        <!-- Регистрация клиента (ИСПРАВЛЕНО: ИНН через text-input) -->
-        @if (chat.state() === 'client_registration' && chat.registrationStep() === 1) {
-        <app-text-input (textSubmit)="onClientStepSubmit(1, $event)" [@messageEnter] placeholder="Введите ИНН (10 или 12 цифр)" type="text" />
+        @if (chat.state() === 'agent_registration' && chat.registrationStep() === 4) {
+        <app-text-input (textSubmit)="onRegStepSubmit(4, $event)" [@messageEnter] placeholder="Введите город"
+            type="text" />
         }
-        
+
+        <!-- Регистрация клиента -->
+
         @if (chat.state() === 'client_registration' && chat.registrationStep() === 2) {
-        <app-phone-input (phoneSubmit)="onClientStepSubmit(2, $event)" [@messageEnter] placeholder="Введите номер телефона" />
+        <app-phone-input (phoneSubmit)="onClientStepSubmit(2, $event)" [@messageEnter]
+            placeholder="Введите номер телефона" />
         }
-        
+
         @if (chat.state() === 'client_registration' && chat.registrationStep() === 3) {
         <app-email-input (emailSubmit)="onClientStepSubmit(3, $event)" [@messageEnter] placeholder="Введите email" />
+        }
+
+        @if (chat.state() === 'client_registration' && chat.registrationStep() === 4) { <!-- ДОБАВЛЕНО -->
+        <app-text-input (textSubmit)="onClientStepSubmit(4, $event)" [@messageEnter] placeholder="Введите ФИО"
+            type="text" />
         }
     </div>
 </div>

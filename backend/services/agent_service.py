@@ -12,6 +12,7 @@ class AgentService:
     @staticmethod
     async def create_agent(
         session: AsyncSession,
+        full_name: str,
         max_user_id: int,
         phone: str,
         email: str,
@@ -50,6 +51,7 @@ class AgentService:
         
         agent = Agent(
             max_user_id=max_user_id,
+            full_name=full_name,
             phone=phone,  # Оригинальный номер сохраняем как есть
             email=email,
             city=city,

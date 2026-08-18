@@ -16,6 +16,7 @@ class AgentRegisterRequest(BaseModel):
     email: EmailStr
     registration_type: str
     city: Optional[str]  = None
+    full_name: str = Field(..., min_length=2, max_length=255)  
     
     @field_validator("phone")
     @classmethod
@@ -37,6 +38,7 @@ class AgentRegisterRequest(BaseModel):
 
 class AgentResponse(BaseModel):
     id: int
+    full_name: str
     max_user_id: int
     phone: str
     email: str
@@ -64,6 +66,7 @@ class AgentStatusResponse(BaseModel):
 
 class ApplicationResponse(BaseModel):
     id: int
+    full_name: str
     max_user_id: int
     phone: str
     email: str
@@ -174,3 +177,13 @@ class ClientRegisterResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     role: str = "client"
+
+class AgentStatsResponse(BaseModel):
+    total_referred_clients: int = Field(description="Всего клиентов, зарегистрированных по вашей реферальной ссылке")
+    active_referred_clients: int = Field(description="Из них клиентов, совершивших хотя бы одну покупку")
+    total_referred_purchases_count: int = Field(description="Общее количество покупок, совершенных вашими рефералами")
+    total_referred_purchases_amount: float = Field(description="Общая сумма всех покупок ваших рефералов (₽)")
+    total_referred_commission_earned: float = Field(description="Всего начислено вам комиссионных с этих покупок (₽)")
+
+    class Config:
+        from_attributes = True

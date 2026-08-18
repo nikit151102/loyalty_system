@@ -4,13 +4,12 @@ import { Message, ChatButton } from '../../models/message.model';
 import { AddClient } from '../add-client/add-client';
 import { AddPurchase } from '../add-purchase/add-purchase';
 import { AgentClients } from '../agent-clients/agent-clients';
-import { AgentStats } from '../agent-stats/agent-stats';
 import { ReferralSection } from '../referral-section/referral-section';
 import { QrDisplay } from '../qr-display/qr-display';
 
 @Component({
   selector: 'app-message-bubble',
-  imports: [CommonModule, AgentStats, AgentClients, AddClient, AddPurchase, ReferralSection, QrDisplay],
+  imports: [CommonModule, AgentClients, AddClient, AddPurchase, ReferralSection, QrDisplay],
   templateUrl: './message-bubble.html',
   styleUrl: './message-bubble.scss',
 })

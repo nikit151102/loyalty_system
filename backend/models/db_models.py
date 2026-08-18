@@ -40,6 +40,7 @@ class TransactionType(str, enum.Enum):
 class Agent(Base):
     __tablename__ = "agents"
     id = Column(Integer, primary_key=True, autoincrement=True)
+    full_name = Column(String(255), nullable=False, index=True)
     max_user_id = Column(BigInteger, unique=True, nullable=False, index=True)
     phone = Column(String(20), nullable=False, index=True)
     email = Column(String(255), nullable=False, index=True)
@@ -74,6 +75,7 @@ class Agent(Base):
 class Application(Base):
     __tablename__ = "applications"
     id = Column(Integer, primary_key=True, autoincrement=True)
+    full_name = Column(String(255), nullable=False, index=True)
     agent_id = Column(Integer, ForeignKey("agents.id"), unique=True, nullable=True)
     max_user_id = Column(BigInteger, nullable=False, index=True)
     phone = Column(String(20), nullable=False)

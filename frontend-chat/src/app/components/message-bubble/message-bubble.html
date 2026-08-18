@@ -36,9 +36,6 @@
         @if (message.type === 'card' && message.cardData) {
         <div class="card-wrapper">
             @switch (message.cardData.type) {
-            @case ('stats') {
-            <app-agent-stats [stats]="message.cardData.data" />
-            }
             @case ('clients_list') {
             <app-agent-clients [clients]="message.cardData.data" (action)="buttonClick.emit($event)" />
             }
@@ -49,6 +46,7 @@
             <app-add-purchase [client]="message.cardData.data"
                 (submitted)="buttonClick.emit({ action: 'purchase_added', data: $event })" />
             }
+            
             @case ('referral') {
             <app-referral-section [stats]="message.cardData.data" [url]="message.cardData.data.referral_link" />
             }
