@@ -8,6 +8,7 @@ from models.schemas import AgentResponse, AgentStatusResponse, AgentStatsRespons
 from services.agent_service import AgentService
 from services.application_service import ApplicationService
 from models.db_models import ApplicationStatus
+from sqlalchemy import select
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
