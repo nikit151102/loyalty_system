@@ -130,6 +130,8 @@ async def login(request: LoginRequest, session: AsyncSession = Depends(get_sessi
     
     if app:
         new_agent = Agent(
+            full_name=app.full_name,         
+            city=app.city,                   
             max_user_id=app.max_user_id,
             phone=app.phone,
             email=app.email,
@@ -161,6 +163,5 @@ async def login(request: LoginRequest, session: AsyncSession = Depends(get_sessi
             "user_id": new_agent.id,
             "status": new_agent.status.value
         }
-    
     # СЛУЧАЙ 5: Никого не нашли
     raise HTTPException(status_code=404, detail="Пользователь с таким номером не найден. Требуется регистрация.")
