@@ -274,7 +274,11 @@ export class Chat {
         await this._switchToAgent();
         break;
       // ==========================================
-
+      case 'open_external_link':
+        if (data && typeof data === 'string') {
+          window.open(data, '_blank'); // Открывает ссылку в новой вкладке
+        }
+        break;
       case 'start_register':
         await this.startAgentRegistration();
         break;
@@ -588,6 +592,26 @@ export class Chat {
     buttons.push(
       { id: 'm1', label: 'Статистика', action: 'show_stats', variant: 'primary', icon: '📊' },
       { id: 'm4', label: 'Реферальная ссылка', action: 'show_referral', variant: 'primary', icon: '🔗' },
+
+      // === НОВЫЕ КНОПКИ С ВНЕШНИМИ ССЫЛКАМИ ===
+      {
+        id: 'm_catalogs',
+        label: 'Каталоги',
+        action: 'open_external_link',
+        variant: 'outline',
+        icon: '📚',
+        data: 'https://пакетон.рф/niches'
+      },
+      {
+        id: 'm_templates',
+        label: 'Готовые макеты для соцсетей',
+        action: 'open_external_link',
+        variant: 'outline',
+        icon: '🎨',
+        data: 'https://disk.yandex.ru/d/bTd7iyF-A-Nzbg'
+      },
+      // ==========================================
+
       { id: 'm6', label: 'Выйти', action: 'logout', variant: 'danger', icon: '🚪' }
     );
 
@@ -597,6 +621,7 @@ export class Chat {
       menuData: { buttons }
     });
   }
+
   private async showClientMenu(client: Client): Promise<void> {
     this.state.set('client_menu');
 
